@@ -3,7 +3,10 @@ import { StyleSheet, View } from "react-native";
 
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
-import { attendanceStatusLabels } from "@/components/features/employee/attendance/attendance-ui";
+import {
+	attendanceStatusLabels,
+	formatMinutesAsNumericHours,
+} from "@/components/features/employee/attendance/attendance-ui";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { AttendanceScheduleEntry, AttendanceStatus } from "@/database/employee/attendance.type";
 import { parseDateKey, type CalendarDay } from "@/lib/korea-date";
@@ -33,6 +36,26 @@ function getStatusBadgeStyle(status: AttendanceStatus) {
 
 function getStatusTextColor(status: AttendanceStatus) {
 	return status === "completed" ? AppColors.textOnPrimary : status === "missed" ? AppColors.sub : AppColors.primary;
+}
+
+function getPrimaryWorkMinutes(entry: AttendanceScheduleEntry) {
+	if (entry.substituteEmployeeId) {
+		return 0;
+	}
+
+	return entry.status === "completed"
+		? entry.confirmedWorkMinutes ?? entry.scheduledMinutes
+		: entry.scheduledMinutes;
+}
+
+function getSubstituteWorkMinutes(entry: AttendanceScheduleEntry) {
+	return entry.status === "completed"
+		? entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes
+		: entry.scheduledMinutes;
+}
+
+function formatEmployeeBadgeLabel(name: string, minutes: number) {
+	return `${name}(${formatMinutesAsNumericHours(minutes)})`;
 }
 
 function CalendarDayCell({
@@ -98,7 +121,7 @@ function CalendarDayCell({
 
 			<View style={[styles.badgeList, outsideMonth && styles.readOnlyBadgeList]}>
 				{visibleEntries.map(entry => {
-					const hasSubstitute = Boolean(entry.substituteEmployeeId && entry.substituteKakaoName);
+					const hasSubstitute = Boolean(entry.substituteEmployeeId && entry.substituteEmployeeName);
 
 					return (
 						<View
@@ -114,12 +137,12 @@ function CalendarDayCell({
 								numberOfLines={1}
 								style={hasSubstitute ? styles.replacedEmployeeText : undefined}
 							>
-								{entry.kakaoName}
+								{formatEmployeeBadgeLabel(entry.employeeName, getPrimaryWorkMinutes(entry))}
 							</AppText.Xs>
 							{hasSubstitute && (
 								<View style={styles.substituteNameBadge}>
 									<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
-										{entry.substituteKakaoName}
+										{formatEmployeeBadgeLabel(entry.substituteEmployeeName ?? "", getSubstituteWorkMinutes(entry))}
 									</AppText.Xs>
 								</View>
 							)}
@@ -276,17 +299,21 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 2,
 	},
 	substitutedAttendanceBadge: {
+		minHeight: 38,
+		flexDirection: "column",
+		alignItems: "stretch",
 		backgroundColor: "#FFF1F0",
-		paddingHorizontal: 0,
+		paddingHorizontal: 1,
+		paddingVertical: 1,
 	},
 	replacedEmployeeText: {
-		flexShrink: 1,
+		width: "100%",
+		textAlign: "center",
 		textDecorationLine: "line-through",
 	},
 	substituteNameBadge: {
-		maxWidth: "56%",
+		width: "100%",
 		minHeight: 17,
-		flexShrink: 0,
 		alignItems: "center",
 		justifyContent: "center",
 		borderRadius: 2,

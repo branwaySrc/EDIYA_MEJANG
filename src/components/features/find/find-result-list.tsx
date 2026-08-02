@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
 
 import { AppBadge } from "@/components/base/app-badge";
 import { AppIcon } from "@/components/base/app-icon";
@@ -7,8 +7,17 @@ import { AppPressable } from "@/components/base/app-pressable";
 import { AppSpacer } from "@/components/base/app-spacer";
 import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { findEntryKindLabels, type FindEntry, type FindEntryKind, sampleFindEntries } from "@/database/find/find";
-import { chosungSearchWithMatches, type ChosungSearchHighlightRange, type ChosungSearchMatch } from "@/lib/chosung-search";
+import {
+	findEntryKindLabels,
+	type FindEntry,
+	type FindEntryKind,
+} from "@/database/find/find";
+import {
+	chosungSearchWithMatches,
+	type ChosungSearchHighlightRange,
+	type ChosungSearchMatch,
+} from "@/lib/chosung-search";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type FindResultListProps = {
 	activeKind: FindEntryKind;
@@ -84,17 +93,40 @@ function FindResultItem({
 	);
 }
 
-export function FindResultList({ activeKind, keyword = "", onOpenEntry, results = sampleFindEntries }: FindResultListProps) {
+function FindListHeader() {
+	return (
+		<View style={styles.sectionHeader}>
+			<AppText.Sm bold color={AppColors.primary}>
+				검색결과
+			</AppText.Sm>
+		</View>
+	);
+}
+
+function FindListEmpty() {
+	return (
+		<View style={styles.emptyResult}>
+			<AppText.Base color={AppColors.placeholder}>검색 결과가 없습니다.</AppText.Base>
+		</View>
+	);
+}
+
+export function FindResultList({ activeKind, keyword = "", onOpenEntry, results }: FindResultListProps) {
+	const managedEntries = useContentManagementStore(state => state.findEntries);
+	const currentResults = results ?? managedEntries;
 	const hasKeyword = keyword.trim().length > 0;
-	const visibleResults = useMemo(() => results.filter(result => result.kind === activeKind), [activeKind, results]);
+	const visibleResults = useMemo(
+		() => currentResults.filter(result => result.kind === activeKind),
+		[activeKind, currentResults],
+	);
 	const filteredResults = useMemo<ChosungSearchMatch<FindEntry>[]>(
 		() =>
 			hasKeyword
 				? chosungSearchWithMatches(
 						{
 							getChosungText: entry => entry.chosung,
-							getText: entry => entry.title,
-							limit: 12,
+							getText: entry => [entry.title, ...entry.keywords].join(" "),
+							limit: visibleResults.length,
 							query: keyword,
 						},
 						visibleResults,
@@ -104,28 +136,24 @@ export function FindResultList({ activeKind, keyword = "", onOpenEntry, results 
 	);
 
 	return (
-		<View style={styles.container}>
-			<View style={styles.sectionHeader}>
-				<AppText.Sm bold color={AppColors.primary}>
-					검색결과
-				</AppText.Sm>
-			</View>
-
-			<View style={styles.list}>
-				{filteredResults.length === 0 ? (
-					<View style={styles.emptyResult}>
-						<AppText.Base color={AppColors.placeholder}>검색 결과가 없습니다.</AppText.Base>
-					</View>
-				) : (
-					filteredResults.map(({ highlightRange, item: result }, index) => (
-						<View key={result.id}>
-							{index > 0 && <AppSpacer style={styles.itemSpacer} />}
-							<FindResultItem entry={result} highlightRange={highlightRange} onOpen={() => onOpenEntry?.(result)} />
-						</View>
-					))
-				)}
-			</View>
-		</View>
+		<FlatList
+			contentContainerStyle={filteredResults.length === 0 ? styles.emptyContent : styles.content}
+			data={filteredResults}
+			ItemSeparatorComponent={() => <AppSpacer style={styles.itemSpacer} />}
+			keyExtractor={({ item }) => item.id}
+			keyboardShouldPersistTaps="handled"
+			ListEmptyComponent={<FindListEmpty />}
+			ListHeaderComponent={<FindListHeader />}
+			renderItem={({ item: result }) => (
+				<FindResultItem
+					entry={result.item}
+					highlightRange={result.highlightRange}
+					onOpen={() => onOpenEntry?.(result.item)}
+				/>
+			)}
+			showsVerticalScrollIndicator={false}
+			style={styles.container}
+		/>
 	);
 }
 
@@ -133,17 +161,21 @@ export default FindResultList;
 
 const styles = StyleSheet.create({
 	container: {
+		flex: 1,
 		width: "100%",
-		backgroundColor: "#f4f4f4",
+		backgroundColor: "#F4F4F4",
+	},
+	content: {
+		paddingBottom: AppSpacing.xl,
+	},
+	emptyContent: {
+		flexGrow: 1,
 	},
 	sectionHeader: {
 		width: "100%",
 		paddingHorizontal: AppSpacing.md,
 		paddingVertical: AppSpacing.sm,
-		backgroundColor: "#f4f4f4",
-	},
-	list: {
-		width: "100%",
+		backgroundColor: "#F4F4F4",
 	},
 	resultItem: {
 		width: "100%",
@@ -172,11 +204,12 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	emptyResult: {
-		minHeight: 64,
+		flex: 1,
+		minHeight: 180,
 		justifyContent: "center",
 		alignItems: "center",
-		paddingVertical: 100,
 		backgroundColor: AppColors.background,
+		paddingVertical: AppSpacing.xl,
 	},
 	itemSpacer: {
 		opacity: 0.32,

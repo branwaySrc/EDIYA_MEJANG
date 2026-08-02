@@ -6,10 +6,10 @@ import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { formatAttendanceRate, formatMinutesAsHours, shiftColors } from "@/components/features/employee/attendance/attendance-ui";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { useKoreaToday } from "@/components/features/employee/attendance/use-korea-today";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { EmployeeAttendanceSummary } from "@/database/employee/attendance.type";
-import { sampleEmployees } from "@/database/employee/employee";
 import { buildAttendanceMonthSummary, buildAttendanceSchedule } from "@/lib/attendance-schedule";
 import { formatCalendarMonthKey, formatShortDateLabel, getCalendarMonth } from "@/lib/korea-date";
 import { useAttendanceStore } from "@/store/attendance-store";
@@ -88,6 +88,7 @@ function EmployeeStatisticsRow({ onPressDetails, summary }: { onPressDetails: ()
 
 export function AttendanceStatisticsView() {
 	const router = useRouter();
+	const employees = useAttendanceEmployees();
 	const todayKey = useKoreaToday();
 	const currentMonth = useMemo(() => getCalendarMonth(todayKey), [todayKey]);
 	const currentMonthKey = useMemo(() => formatCalendarMonthKey(currentMonth), [currentMonth]);
@@ -96,13 +97,16 @@ export function AttendanceStatisticsView() {
 		() =>
 			buildAttendanceSchedule({
 				...currentMonth,
-				employees: sampleEmployees,
+				employees,
 				records,
 				todayKey,
 			}),
-		[currentMonth, records, todayKey],
+		[currentMonth, employees, records, todayKey],
 	);
-	const summary = useMemo(() => buildAttendanceMonthSummary(schedule, sampleEmployees, todayKey), [schedule, todayKey]);
+	const summary = useMemo(
+		() => buildAttendanceMonthSummary(schedule, employees, todayKey),
+		[employees, schedule, todayKey],
+	);
 	const handlePressDetails = useCallback(
 		(employeeId: string) => {
 			router.push({

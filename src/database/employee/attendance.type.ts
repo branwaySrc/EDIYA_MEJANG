@@ -85,11 +85,9 @@ export type AttendanceLogRow = {
 
 export type AttendanceScheduleEntry = AttendanceRecord & {
 	employeeName: string;
-	kakaoName: string;
 	scheduledMinutes: number;
 	shiftGroup: EmployeeShiftGroup;
 	substituteEmployeeName?: string;
-	substituteKakaoName?: string;
 };
 
 export type EmployeeAttendanceSummary = {

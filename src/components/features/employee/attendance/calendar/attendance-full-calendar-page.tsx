@@ -5,10 +5,10 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { AttendanceDayPopup } from "@/components/features/employee/attendance/calendar/attendance-day-popup";
 import { AttendanceGreetingOverlay } from "@/components/features/employee/attendance/calendar/attendance-greeting-overlay";
 import { AttendanceMonthCalendar } from "@/components/features/employee/attendance/calendar/attendance-month-calendar";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { useKoreaToday } from "@/components/features/employee/attendance/use-korea-today";
 import { AppLayout } from "@/components/global/app-layout";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { sampleEmployees } from "@/database/employee/employee";
 import type { AttendanceFeedbackPayload } from "@/lib/attendance-greeting";
 import { buildAttendanceSchedule, groupAttendanceByDate } from "@/lib/attendance-schedule";
 import { addCalendarMonths, getCalendarMonth } from "@/lib/korea-date";
@@ -21,6 +21,7 @@ function getInitialDateKey(date: string | string[] | undefined, fallbackDateKey:
 
 export function AttendanceFullCalendarPage() {
 	const router = useRouter();
+	const employees = useAttendanceEmployees();
 	const { date } = useLocalSearchParams<{ date?: string | string[] }>();
 	const todayKey = useKoreaToday();
 	const initialDateKey = getInitialDateKey(date, todayKey);
@@ -32,11 +33,11 @@ export function AttendanceFullCalendarPage() {
 		() =>
 			buildAttendanceSchedule({
 				...visibleMonth,
-				employees: sampleEmployees,
+				employees,
 				records: attendanceRecords,
 				todayKey,
 			}),
-		[attendanceRecords, todayKey, visibleMonth],
+		[attendanceRecords, employees, todayKey, visibleMonth],
 	);
 	const entriesByDate = useMemo(() => groupAttendanceByDate(visibleSchedule), [visibleSchedule]);
 	const selectedEntries = selectedDateKey ? entriesByDate.get(selectedDateKey) ?? [] : [];

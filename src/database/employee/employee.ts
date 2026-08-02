@@ -7,152 +7,192 @@ export type EmployeeDirectory = {
 
 export const employeeShiftGroups: EmployeeShiftGroup[] = ["오픈", "미들", "마감"];
 
-export const sampleOwner: Employee = {
-	id: "owner-001",
-	name: "사장",
-	kakaoName: "월피동점 사장",
-	shiftGroup: "오픈",
-	workDays: ["월", "화", "수", "목", "금", "토", "일"],
-	workTime: "24/7",
-	joinedAt: "2024-01-01",
-	owner: true,
-};
+const sampleCreatedAt = "2026-07-01T00:00:00.000Z";
 
-export const sampleEmployees: Employee[] = [
-	{
+function createSampleEmployeeRecord(
+	record: Pick<
+		EmployeeRecord,
+		"id" | "joined_at" | "name" | "shift_group" | "work_days" | "work_end_minutes" | "work_start_minutes"
+	> &
+		Partial<EmployeeRecord>,
+): EmployeeRecord {
+	return {
+		address: null,
+		bank_account_number: null,
+		bank_name: null,
+		birth_date: null,
+		created_at: sampleCreatedAt,
+		email: null,
+		hourly_wage: null,
+		is_owner: false,
+		phone: "010-0000-0000",
+		phone_public: false,
+		updated_at: sampleCreatedAt,
+		workplace_id: "wolpi",
+		workplace_name: "이디야 월피동점",
+		...record,
+	};
+}
+
+export const sampleEmployeeRecords: EmployeeRecord[] = [
+	createSampleEmployeeRecord({
+		id: "owner-001",
+		name: "사장",
+		phone: "010-4514-7173",
+		phone_public: true,
+		shift_group: "오픈",
+		work_days: ["월", "화", "수", "목", "금", "토", "일"],
+		work_start_minutes: 0,
+		work_end_minutes: 1439,
+		joined_at: "2024-01-01",
+		is_owner: true,
+	}),
+	createSampleEmployeeRecord({
 		id: "open-001",
-		name: "윤하나",
-		kakaoName: "하나",
-		shiftGroup: "오픈",
-		workDays: ["월", "수", "금"],
-		workTime: "07:00 - 12:00",
-		joinedAt: "2026-07-02",
-	},
-	{
+		name: "김하나",
+		shift_group: "오픈",
+		work_days: ["월", "수", "금"],
+		work_start_minutes: 7 * 60,
+		work_end_minutes: 12 * 60,
+		joined_at: "2026-07-02",
+	}),
+	createSampleEmployeeRecord({
 		id: "open-002",
-		name: "민서준",
-		kakaoName: "서준",
-		shiftGroup: "오픈",
-		workDays: ["화", "목"],
-		workTime: "08:00 - 13:00",
-		joinedAt: "2026-05-20",
-	},
-	{
-		id: "open-003",
-		name: "고다은",
-		kakaoName: "다은",
-		shiftGroup: "오픈",
-		workDays: ["월", "화", "수"],
-		workTime: "09:00 - 14:00",
-		joinedAt: "2026-03-20",
-	},
-	{
-		id: "open-004",
-		name: "한지호",
-		kakaoName: "지호",
-		shiftGroup: "오픈",
-		workDays: ["목", "금", "토"],
-		workTime: "07:00 - 15:00",
-		joinedAt: "2025-11-10",
-	},
-	{
+		name: "이민서",
+		shift_group: "오픈",
+		work_days: ["화", "목"],
+		work_start_minutes: 8 * 60,
+		work_end_minutes: 13 * 60,
+		joined_at: "2026-05-20",
+	}),
+	createSampleEmployeeRecord({
 		id: "middle-001",
-		name: "백유진",
-		kakaoName: "유진",
-		shiftGroup: "미들",
-		workDays: ["월", "목"],
-		workTime: "12:00 - 17:00",
-		joinedAt: "2026-07-04",
-	},
-	{
+		name: "박유진",
+		shift_group: "미들",
+		work_days: ["월", "목"],
+		work_start_minutes: 12 * 60,
+		work_end_minutes: 17 * 60,
+		joined_at: "2026-07-04",
+	}),
+	createSampleEmployeeRecord({
 		id: "middle-002",
-		name: "이도현",
-		kakaoName: "도현",
-		shiftGroup: "미들",
-		workDays: ["화", "금"],
-		workTime: "13:00 - 18:00",
-		joinedAt: "2026-05-15",
-	},
-	{
-		id: "middle-003",
-		name: "정아린",
-		kakaoName: "아린",
-		shiftGroup: "미들",
-		workDays: ["수", "토"],
-		workTime: "14:00 - 19:00",
-		joinedAt: "2026-03-12",
-	},
-	{
-		id: "middle-004",
 		name: "최현우",
-		kakaoName: "현우",
-		shiftGroup: "미들",
-		workDays: ["월", "수", "일"],
-		workTime: "12:00 - 20:00",
-		joinedAt: "2025-10-25",
-	},
-	{
+		shift_group: "미들",
+		work_days: ["화", "금"],
+		work_start_minutes: 13 * 60,
+		work_end_minutes: 18 * 60,
+		joined_at: "2026-05-15",
+	}),
+	createSampleEmployeeRecord({
 		id: "close-001",
-		name: "서지안",
-		kakaoName: "지안",
-		shiftGroup: "마감",
-		workDays: ["월", "금"],
-		workTime: "17:00 - 22:00",
-		joinedAt: "2026-07-06",
-	},
-	{
+		name: "정지윤",
+		shift_group: "마감",
+		work_days: ["수", "금"],
+		work_start_minutes: 17 * 60,
+		work_end_minutes: 22 * 60,
+		joined_at: "2026-07-06",
+	}),
+	createSampleEmployeeRecord({
 		id: "close-002",
-		name: "문태오",
-		kakaoName: "태오",
-		shiftGroup: "마감",
-		workDays: ["화", "목", "토"],
-		workTime: "18:00 - 23:00",
-		joinedAt: "2026-05-08",
-	},
-	{
-		id: "close-003",
-		name: "오나래",
-		kakaoName: "나래",
-		shiftGroup: "마감",
-		workDays: ["수", "금", "일"],
-		workTime: "19:00 - 24:00",
-		joinedAt: "2026-02-18",
-	},
-	{
-		id: "close-004",
 		name: "강하준",
-		kakaoName: "하준",
-		shiftGroup: "마감",
-		workDays: ["토", "일"],
-		workTime: "17:00 - 24:00",
-		joinedAt: "2025-08-21",
-	},
+		shift_group: "마감",
+		work_days: ["토", "일"],
+		work_start_minutes: 18 * 60,
+		work_end_minutes: 23 * 60,
+		joined_at: "2026-05-08",
+	}),
 ];
 
+const runtimeEmployeeRecords: EmployeeRecord[] = [];
+
+export function formatClockMinutes(totalMinutes: number) {
+	const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+	const hours = Math.floor(normalizedMinutes / 60);
+	const minutes = normalizedMinutes % 60;
+
+	return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function formatEmployeeWorkTime(employee: Pick<Employee, "owner" | "workEndMinutes" | "workStartMinutes">) {
+	if (employee.owner) {
+		return "상시";
+	}
+
+	return `${formatClockMinutes(employee.workStartMinutes)} - ${formatClockMinutes(employee.workEndMinutes)}`;
+}
+
 export function toEmployee(record: EmployeeRecord): Employee {
-	return {
+	const employeeBase = {
+		address: record.address ?? "",
+		bankAccountNumber: record.bank_account_number ?? "",
+		bankName: record.bank_name ?? "",
+		birthDate: record.birth_date ?? "",
+		createdAt: record.created_at,
+		email: record.email ?? "",
+		hourlyWage: record.hourly_wage,
 		id: record.id,
-		name: record.name,
-		kakaoName: record.kakao_name,
-		shiftGroup: record.shift_group,
-		workDays: [...record.work_days],
-		workTime: record.work_time,
 		joinedAt: record.joined_at,
+		name: record.name,
 		owner: record.is_owner,
+		phone: record.phone,
+		phonePublic: record.phone_public,
+		shiftGroup: record.shift_group,
+		updatedAt: record.updated_at,
+		workDays: [...record.work_days],
+		workEndMinutes: record.work_end_minutes,
+		workplaceId: record.workplace_id,
+		workplaceName: record.workplace_name ?? "",
+		workStartMinutes: record.work_start_minutes,
+	};
+
+	return {
+		...employeeBase,
+		kakaoName: employeeBase.phonePublic ? employeeBase.phone : "카카오톡",
+		workTime: formatEmployeeWorkTime(employeeBase),
 	};
 }
 
 export function toEmployeeRecord(employee: Employee): EmployeeRecord {
 	return {
+		address: employee.address || null,
+		bank_account_number: employee.bankAccountNumber || null,
+		bank_name: employee.bankName || null,
+		birth_date: employee.birthDate || null,
+		created_at: employee.createdAt,
+		email: employee.email || null,
+		hourly_wage: employee.hourlyWage,
 		id: employee.id,
-		name: employee.name,
-		kakao_name: employee.kakaoName,
-		shift_group: employee.shiftGroup,
-		work_days: [...employee.workDays],
-		work_time: employee.workTime,
-		joined_at: employee.joinedAt,
 		is_owner: employee.owner ?? false,
+		joined_at: employee.joinedAt,
+		name: employee.name,
+		phone: employee.phone,
+		phone_public: employee.phonePublic,
+		shift_group: employee.shiftGroup,
+		updated_at: employee.updatedAt,
+		work_days: [...employee.workDays],
+		work_end_minutes: employee.workEndMinutes,
+		workplace_id: employee.workplaceId,
+		workplace_name: employee.workplaceName || null,
+		work_start_minutes: employee.workStartMinutes,
 	};
+}
+
+export function registerEmployeeRecord(record: EmployeeRecord) {
+	const existingIndex = runtimeEmployeeRecords.findIndex(item => item.id === record.id);
+
+	if (existingIndex >= 0) {
+		runtimeEmployeeRecords[existingIndex] = record;
+		return;
+	}
+
+	runtimeEmployeeRecords.push(record);
+}
+
+export function getEmployeeRecordsSnapshot(): EmployeeRecord[] {
+	return [...sampleEmployeeRecords, ...runtimeEmployeeRecords].map(record => ({
+		...record,
+		work_days: [...record.work_days],
+	}));
 }
 
 export function buildEmployeeSections(employees: Employee[]): EmployeeSection[] {
@@ -162,11 +202,12 @@ export function buildEmployeeSections(employees: Employee[]): EmployeeSection[] 
 	}));
 }
 
-export const sampleEmployeeRecords: EmployeeRecord[] = [sampleOwner, ...sampleEmployees].map(toEmployeeRecord);
+export const sampleOwner = toEmployee(sampleEmployeeRecords[0]);
+export const sampleEmployees = sampleEmployeeRecords.slice(1).map(toEmployee);
 
-export function buildEmployeeDirectory(records: EmployeeRecord[] = sampleEmployeeRecords): EmployeeDirectory {
+export function buildEmployeeDirectory(records: EmployeeRecord[] = getEmployeeRecordsSnapshot()): EmployeeDirectory {
 	const employees = records.map(toEmployee);
-	const owner = employees.find(employee => employee.owner) ?? toEmployee(toEmployeeRecord(sampleOwner));
+	const owner = employees.find(employee => employee.owner) ?? sampleOwner;
 	const staff = employees.filter(employee => !employee.owner);
 
 	return {
@@ -176,7 +217,7 @@ export function buildEmployeeDirectory(records: EmployeeRecord[] = sampleEmploye
 }
 
 export function getEmployeeDirectorySnapshot(): EmployeeDirectory {
-	return buildEmployeeDirectory(sampleEmployeeRecords);
+	return buildEmployeeDirectory();
 }
 
 export async function fetchEmployeeDirectory(): Promise<EmployeeDirectory> {

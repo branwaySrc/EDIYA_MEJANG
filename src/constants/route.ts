@@ -7,14 +7,14 @@ export type AppRouteId =
 	| "find-materials"
 	| "paid-customer"
 	| "delivery-order-admin"
+	| "store-vendors"
 	| "missing-item-request"
 	| "owner-space"
 	| "updates"
 	| "employee-info"
 	| "attendance"
 	| "notices"
-	| "manual"
-	| "tutorial";
+	| "manual";
 
 export type DrawerMenuId = AppRouteId;
 
@@ -43,6 +43,7 @@ export const appRouteIds: AppRouteId[] = [
 	"find-materials",
 	"paid-customer",
 	"delivery-order-admin",
+	"store-vendors",
 	"missing-item-request",
 	"owner-space",
 	"updates",
@@ -50,7 +51,6 @@ export const appRouteIds: AppRouteId[] = [
 	"attendance",
 	"notices",
 	"manual",
-	"tutorial",
 ];
 
 export const drawerSectionTitles: DrawerSectionTitle[] = ["일반", "세부", "직원", "기타"];
@@ -78,6 +78,12 @@ export const appRoutes: Record<AppRouteId, AppRouteConfig> = {
 		path: "/delivery-order-admin",
 		label: "배달/발주 어드민",
 		icon: "server-outline",
+		drawerSection: "세부",
+	},
+	"store-vendors": {
+		path: "/store-vendors",
+		label: "매장 및 거래처",
+		icon: "business-outline",
 		drawerSection: "세부",
 	},
 	"missing-item-request": {
@@ -117,12 +123,6 @@ export const appRoutes: Record<AppRouteId, AppRouteConfig> = {
 	manual: {
 		path: "/manual",
 		label: "직원 메뉴얼",
-		icon: "book-outline",
-		drawerSection: "직원",
-	},
-	tutorial: {
-		path: "/tutorial",
-		label: "튜토리얼",
 		icon: "book-outline",
 		drawerSection: "직원",
 	},

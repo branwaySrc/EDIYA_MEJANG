@@ -28,6 +28,13 @@
           "imageWidth": 160
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "메뉴와 매장 운영 이미지를 등록하기 위해 사진 접근 권한이 필요합니다.",
+          "microphonePermission": false
+        }
+      ],
       "expo-mail-composer",
       "expo-sqlite"
     ],

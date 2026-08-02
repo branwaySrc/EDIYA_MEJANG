@@ -1,42 +1,81 @@
-import type { PaidCustomer } from "@/database/paid/paid-customer.type";
+import type {
+	PaidCustomer,
+	PaidCustomerRecord,
+	PaidLedgerEntry,
+	PaidLedgerEntryRecord,
+	PaidLedgerTransactionType,
+} from "@/database/paid/paid-customer.type";
 
-export const samplePaidCustomers: PaidCustomer[] = [
-	{
-		id: "wolpi-office",
-		name: "김민준",
-		nickname: "월피 사무실",
-		affiliation: "월피동",
-		firstPaidDate: "2026-06-12",
-		initialBalance: 150000,
-		ledger: [
-			{ id: "wolpi-office-1", date: "2026-07-08", amount: 12000, balanceAfter: 138000, type: "usage" },
-			{ id: "wolpi-office-2", date: "2026-07-18", amount: 18000, balanceAfter: 120000, type: "usage" },
-		],
-	},
-	{
-		id: "morning-team",
-		name: "박서연",
-		nickname: "아침팀",
-		affiliation: "선부중앙",
-		firstPaidDate: "2026-05-28",
-		initialBalance: 100000,
-		ledger: [{ id: "morning-team-1", date: "2026-07-15", amount: 9000, balanceAfter: 91000, type: "usage" }],
-	},
-	{
-		id: "fitness-member",
-		name: "이도윤",
-		nickname: "헬스장",
-		affiliation: "프라자 3층",
-		firstPaidDate: "2026-07-01",
-		initialBalance: 200000,
-		ledger: [],
-	},
-];
+export const defaultPaidStoreId = "wolpi";
+
+export const samplePaidCustomers: PaidCustomer[] = [];
+
+export function getPaidLedgerAmountDelta(type: PaidLedgerTransactionType, amount: number): number {
+	if (type === "usage" || type === "refund") {
+		return -amount;
+	}
+
+	if (type === "void") {
+		return 0;
+	}
+
+	return amount;
+}
+
+export function createPaidCustomerSearchText(customer: Pick<PaidCustomer, "affiliation" | "name" | "nickname" | "phone">): string {
+	return [customer.name, customer.nickname, customer.affiliation, customer.phone].filter(Boolean).join(" ").toLowerCase();
+}
 
 export function getPaidCustomerBalance(customer: PaidCustomer): number {
-	return customer.ledger.at(-1)?.balanceAfter ?? customer.initialBalance;
+	return customer.currentBalance ?? customer.ledger.at(-1)?.balanceAfter ?? customer.initialBalance;
 }
 
 export function getRecentUsageDate(customer: PaidCustomer): string {
-	return customer.ledger.at(-1)?.date ?? "-";
+	return customer.ledger.findLast(entry => entry.type === "usage")?.businessDate ?? customer.ledger.at(-1)?.businessDate ?? "-";
+}
+
+export function isPaidLedgerDebit(entry: Pick<PaidLedgerEntry, "amountDelta" | "type">): boolean {
+	return entry.amountDelta < 0 || entry.type === "usage" || entry.type === "refund";
+}
+
+export function mapPaidLedgerEntryRecord(record: PaidLedgerEntryRecord): PaidLedgerEntry {
+	return {
+		id: record.id,
+		storeId: record.store_id,
+		customerId: record.customer_id,
+		type: record.type,
+		date: record.business_date,
+		businessDate: record.business_date,
+		amount: record.amount,
+		amountDelta: record.amount_delta,
+		balanceBefore: record.balance_before,
+		balanceAfter: record.balance_after,
+		memo: record.memo ?? undefined,
+		occurredAt: record.occurred_at,
+		createdAt: record.created_at,
+		createdBy: record.created_by,
+		idempotencyKey: record.idempotency_key,
+		reversalOfEntryId: record.reversal_of_entry_id,
+	};
+}
+
+export function mapPaidCustomerRecord(record: PaidCustomerRecord, ledger: PaidLedgerEntryRecord[] = []): PaidCustomer {
+	return {
+		id: record.id,
+		storeId: record.store_id,
+		name: record.name,
+		nickname: record.nickname,
+		affiliation: record.affiliation,
+		phone: record.phone,
+		memo: record.memo,
+		firstPaidDate: record.first_paid_date,
+		initialBalance: record.initial_balance,
+		currentBalance: record.current_balance,
+		status: record.status,
+		searchText: record.search_text,
+		createdAt: record.created_at,
+		updatedAt: record.updated_at,
+		archivedAt: record.archived_at,
+		ledger: ledger.map(mapPaidLedgerEntryRecord),
+	};
 }

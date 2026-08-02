@@ -1,39 +1,28 @@
 import { type Href, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { AppIcon } from "@/components/base/app-icon";
+import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
-import { TutorialItem } from "@/components/features/tutorial/tutorial-item";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { fetchTutorialTopics, getTutorialTopicsSnapshot } from "@/database/tutorial/tutorial";
-import type { TutorialTopic } from "@/database/tutorial/tutorial.type";
+import type { TutorialEntry, TutorialTopic } from "@/database/tutorial/tutorial.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type TutorialListProps = {
+	detailRoutePrefix?: string;
 	topics?: TutorialTopic[];
 };
 
-export function TutorialList({ topics }: TutorialListProps) {
+export function TutorialList({ detailRoutePrefix = "/tutorial", topics }: TutorialListProps) {
 	const router = useRouter();
-	const [tutorialTopics, setTutorialTopics] = useState(topics ?? getTutorialTopicsSnapshot());
-	const currentTopics = topics ?? tutorialTopics;
+	const managedTopics = useContentManagementStore(state => state.tutorialTopics);
+	const managedEntries = useContentManagementStore(state => state.tutorialEntries);
+	const currentEntries = topics
+		? managedEntries.filter(entry => topics.some(topic => topic.slug === entry.topicSlug))
+		: managedEntries;
 
-	useEffect(() => {
-		if (topics) {
-			return;
-		}
-
-		let mounted = true;
-
-		void fetchTutorialTopics().then(nextTopics => {
-			if (mounted) {
-				setTutorialTopics(nextTopics);
-			}
-		});
-
-		return () => {
-			mounted = false;
-		};
-	}, [topics]);
+	const getSubtitle = (entry: TutorialEntry) =>
+		entry.description?.trim() || entry.shiftGroup || managedTopics.find(topic => topic.slug === entry.topicSlug)?.title || "튜토리얼";
 
 	return (
 		<View style={styles.container}>
@@ -45,8 +34,26 @@ export function TutorialList({ topics }: TutorialListProps) {
 			</View>
 
 			<View style={styles.list}>
-				{currentTopics.map(topic => (
-					<TutorialItem key={topic.slug} onPress={() => router.push(`/tutorial/${topic.slug}` as Href)} topic={topic} />
+				{currentEntries.map(entry => (
+					<AppPressable
+						key={entry.id}
+						accessibilityLabel={`${entry.title} 튜토리얼 보기`}
+						accessibilityRole="button"
+						onPress={() => router.push(`${detailRoutePrefix}/${entry.id}` as Href)}
+						pressedColor="rgba(0, 75, 147, 0.04)"
+						radius="base"
+						style={styles.item}
+					>
+						<View style={styles.itemText}>
+							<AppText.Lg bold numberOfLines={2}>
+								{entry.title}
+							</AppText.Lg>
+							<AppText.Sm color={AppColors.sub} numberOfLines={1}>
+								{getSubtitle(entry)}
+							</AppText.Sm>
+						</View>
+						<AppIcon.Base color={AppColors.sub} name="chevron-forward" pressable={false} />
+					</AppPressable>
 				))}
 			</View>
 		</View>
@@ -66,5 +73,23 @@ const styles = StyleSheet.create({
 	},
 	list: {
 		gap: AppSpacing.sm,
+	},
+	item: {
+		width: "100%",
+		minHeight: 76,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: AppSpacing.md,
+		borderWidth: 1,
+		borderColor: "rgba(71, 85, 105, 0.24)",
+		backgroundColor: AppColors.background,
+		paddingHorizontal: AppSpacing.md,
+		paddingVertical: AppSpacing.sm,
+	},
+	itemText: {
+		flex: 1,
+		minWidth: 0,
+		gap: AppSpacing.xs,
 	},
 });

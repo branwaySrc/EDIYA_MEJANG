@@ -6,9 +6,9 @@ import { AttendanceDayPopup } from "@/components/features/employee/attendance/ca
 import { AttendanceGreetingOverlay } from "@/components/features/employee/attendance/calendar/attendance-greeting-overlay";
 import { AttendancePeriodCalendar } from "@/components/features/employee/attendance/calendar/attendance-period-calendar";
 import { TodayShiftTimeline } from "@/components/features/employee/attendance/calendar/today-shift-timeline";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { useKoreaToday } from "@/components/features/employee/attendance/use-korea-today";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { sampleEmployees } from "@/database/employee/employee";
 import type { AttendanceFeedbackPayload } from "@/lib/attendance-greeting";
 import {
 	buildAttendanceSchedule,
@@ -27,6 +27,7 @@ import { useAttendanceStore } from "@/store/attendance-store";
 
 export function AttendanceCalendarView() {
 	const router = useRouter();
+	const employees = useAttendanceEmployees();
 	const todayKey = useKoreaToday();
 	const todayPeriod = useMemo(() => getCalendarMonthPeriod(todayKey), [todayKey]);
 	const [manualPeriod, setManualPeriod] = useState<CalendarMonthPeriod | null>(null);
@@ -43,32 +44,32 @@ export function AttendanceCalendarView() {
 		() =>
 			buildAttendanceScheduleForDates({
 				dateKeys: visiblePeriodDateKeys,
-				employees: sampleEmployees,
+				employees,
 				records: attendanceRecords,
 				todayKey,
 			}),
-		[attendanceRecords, todayKey, visiblePeriodDateKeys],
+		[attendanceRecords, employees, todayKey, visiblePeriodDateKeys],
 	);
 	const visibleMonthSchedule = useMemo(
 		() =>
 			buildAttendanceSchedule({
 				year: visiblePeriod.year,
 				month: visiblePeriod.month,
-				employees: sampleEmployees,
+				employees,
 				records: attendanceRecords,
 				todayKey,
 			}),
-		[attendanceRecords, todayKey, visiblePeriod.month, visiblePeriod.year],
+		[attendanceRecords, employees, todayKey, visiblePeriod.month, visiblePeriod.year],
 	);
 	const todaySchedule = useMemo(
 		() =>
 			buildAttendanceScheduleForDates({
 				dateKeys: [todayKey],
-				employees: sampleEmployees,
+				employees,
 				records: attendanceRecords,
 				todayKey,
 			}),
-		[attendanceRecords, todayKey],
+		[attendanceRecords, employees, todayKey],
 	);
 	const entriesByDate = useMemo(() => groupAttendanceByDate(visibleSchedule), [visibleSchedule]);
 	const todayEntries = useMemo(

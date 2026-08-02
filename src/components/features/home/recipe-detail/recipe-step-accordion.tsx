@@ -10,40 +10,62 @@ import type { RecipeStep, RecipeVisual } from "@/database/recipe/recipe-details.
 const fallbackRecipeImage = require("../../../../../assets/images/skeleton/fallbackImg.jpg") as ImageSourcePropType;
 
 export type RecipeStepAccordionProps = {
+	stepNumber: number;
 	step: RecipeStep;
 };
 
+function getStepTitle(title: string) {
+	return title.replace(/^\s*\d+\.\s*/, "");
+}
+
+function getVisualDescription(visual: RecipeVisual) {
+	return visual.desc ?? visual.description;
+}
+
+function getVisualImageSource(visual: RecipeVisual) {
+	const imageUri = visual.image ?? visual.imageUri;
+
+	return imageUri ? { uri: imageUri } : fallbackRecipeImage;
+}
+
 function RecipeVisualBlock({ visual }: { visual: RecipeVisual }) {
-	const imageSource = visual.imageUri ? { uri: visual.imageUri } : fallbackRecipeImage;
+	const imageSource = getVisualImageSource(visual);
+	const visualDescription = getVisualDescription(visual);
 
 	return (
 		<View style={styles.visualBlock}>
 			<Image accessibilityLabel={visual.title} resizeMode="cover" source={imageSource} style={styles.visualImage} />
 			<View style={styles.visualTextArea}>
-				<AppText.Sm bold numberOfLines={1}>
+				<AppText.Sm bold numberOfLines={1} style={styles.visualTitle}>
 					{visual.title}
 				</AppText.Sm>
-				<AppText.Sm color={AppColors.sub}>{visual.description}</AppText.Sm>
+				{visualDescription && <AppText.Sm color={AppColors.sub}>{visualDescription}</AppText.Sm>}
 			</View>
 		</View>
 	);
 }
 
-export function RecipeStepAccordion({ step }: RecipeStepAccordionProps) {
+export function RecipeStepAccordion({ step, stepNumber }: RecipeStepAccordionProps) {
 	const [expanded, setExpanded] = useState(false);
+	const stepTitle = getStepTitle(step.title);
 
 	return (
 		<View style={styles.container}>
 			<AppPressable
-				accessibilityLabel={`${step.title} ${expanded ? "닫기" : "열기"}`}
+				accessibilityLabel={`${stepNumber}. ${stepTitle} ${expanded ? "접기" : "열기"}`}
 				accessibilityRole="button"
 				onPress={() => setExpanded(current => !current)}
 				pressedColor="rgba(0, 75, 147, 0.04)"
 				style={styles.row}
 			>
+				<View style={styles.stepNumberBadge}>
+					<AppText.Sm bold color={AppColors.textOnPrimary}>
+						{stepNumber}
+					</AppText.Sm>
+				</View>
 				<View style={styles.rowTextArea}>
 					<AppText.Base bold numberOfLines={1}>
-						{step.title}
+						{stepTitle}
 					</AppText.Base>
 				</View>
 				<AppIcon.Sm color={AppColors.sub} name={expanded ? "chevron-up" : "chevron-down"} pressable={false} />
@@ -94,6 +116,14 @@ const styles = StyleSheet.create({
 		flex: 1,
 		minWidth: 0,
 	},
+	stepNumberBadge: {
+		width: 28,
+		height: 28,
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: 999,
+		backgroundColor: AppColors.primary,
+	},
 	expandedArea: {
 		width: "100%",
 		gap: AppSpacing.md,
@@ -121,10 +151,14 @@ const styles = StyleSheet.create({
 		minWidth: 0,
 	},
 	visualList: {
+		width: "100%",
+		flexDirection: "row",
+		flexWrap: "wrap",
 		gap: AppSpacing.sm,
 	},
 	visualBlock: {
-		width: "100%",
+		width: "48%",
+		minWidth: 0,
 		gap: AppSpacing.sm,
 		borderWidth: 1,
 		borderColor: "#E2E8F0",
@@ -132,12 +166,16 @@ const styles = StyleSheet.create({
 	},
 	visualImage: {
 		width: "100%",
-		aspectRatio: 16 / 9,
+		aspectRatio: 1,
 		backgroundColor: "#EAF3FC",
 	},
 	visualTextArea: {
 		gap: AppSpacing.xs,
 		paddingHorizontal: AppSpacing.md,
 		paddingBottom: AppSpacing.md,
+	},
+	visualTitle: {
+		flex: 1,
+		minWidth: 0,
 	},
 });

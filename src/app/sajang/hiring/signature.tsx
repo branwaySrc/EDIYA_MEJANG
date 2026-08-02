@@ -7,7 +7,7 @@ export default function HiringSignatureScreen() {
 	const router = useRouter();
 
 	return (
-		<AppLayout drawerEnabled={false} leadingMode="back" onPressBack={() => router.back()} title="직원 서명" type="scrollview">
+		<AppLayout drawerEnabled={false} leadingMode="back" onPressBack={() => router.back()} title="요약 및 서명" type="scrollview">
 			<HiringSignatureView />
 		</AppLayout>
 	);

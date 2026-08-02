@@ -21,9 +21,11 @@ export type FindMaterialEntry = FindEntryBase & {
 };
 
 export type FindMaterialDetailImage = {
-	alt: string;
+	alt?: string;
+	desc?: string;
+	image?: ImageSourcePropType;
 	id: string;
-	source: ImageSourcePropType;
+	source?: ImageSourcePropType;
 	title?: string;
 };
 

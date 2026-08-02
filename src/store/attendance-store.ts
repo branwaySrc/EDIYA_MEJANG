@@ -14,8 +14,12 @@ type AttendanceStoreState = {
 	cancelSubstitute: (entry: AttendanceScheduleEntry) => void;
 	logs: AttendanceLogRecord[];
 	records: AttendanceRecord[];
-	registerAttendance: (entry: AttendanceScheduleEntry) => void;
-	registerSubstitute: (entry: AttendanceScheduleEntry, substituteEmployeeId: string) => void;
+	registerAttendance: (entry: AttendanceScheduleEntry, confirmedWorkMinutes: number) => void;
+	registerSubstitute: (
+		entry: AttendanceScheduleEntry,
+		substituteEmployeeId: string,
+		confirmedWorkMinutes: number,
+	) => void;
 };
 
 let mutationSequence = 0;
@@ -93,7 +97,7 @@ export const useAttendanceStore = create<AttendanceStoreState>(set => ({
 	records: getAttendanceRecordsSnapshot(),
 	logs: getAttendanceLogsSnapshot(),
 
-	registerAttendance: entry =>
+	registerAttendance: (entry, confirmedWorkMinutes) =>
 		set(state => {
 			const now = new Date();
 			const createdAt = now.toISOString();
@@ -102,7 +106,7 @@ export const useAttendanceStore = create<AttendanceStoreState>(set => ({
 				status: "completed",
 				checkedInAt: createdAt,
 				checkedOutAt: undefined,
-				confirmedWorkMinutes: entry.scheduledMinutes,
+				confirmedWorkMinutes,
 				substituteEmployeeId: undefined,
 				substituteCheckedInAt: undefined,
 				substituteConfirmedWorkMinutes: undefined,
@@ -161,7 +165,7 @@ export const useAttendanceStore = create<AttendanceStoreState>(set => ({
 			};
 		}),
 
-	registerSubstitute: (entry, substituteEmployeeId) =>
+	registerSubstitute: (entry, substituteEmployeeId, confirmedWorkMinutes) =>
 		set(state => {
 			if (substituteEmployeeId === entry.employeeId) {
 				return state;
@@ -177,7 +181,7 @@ export const useAttendanceStore = create<AttendanceStoreState>(set => ({
 				confirmedWorkMinutes: undefined,
 				substituteEmployeeId,
 				substituteCheckedInAt: createdAt,
-				substituteConfirmedWorkMinutes: entry.scheduledMinutes,
+				substituteConfirmedWorkMinutes: confirmedWorkMinutes,
 				updatedByEmployeeId: substituteEmployeeId,
 				updatedAt: createdAt,
 			};

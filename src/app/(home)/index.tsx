@@ -13,6 +13,7 @@ import { FloatingSearch } from "@/components/features/home/search/floating-searc
 import { AppLayout } from "@/components/global/app-layout";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Recipe } from "@/database/recipe/recipe.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 const floatingSearchButtonSize = 64;
 const floatingSearchBottomOffset = 64;
@@ -25,6 +26,7 @@ export default function HomeScreen() {
 	const [activeTabId, setActiveTabId] = useState<HomeTabId>("store");
 	const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 	const [recipeDrawerOpen, setRecipeDrawerOpen] = useState(false);
+	const recipeDetails = useContentManagementStore(state => state.recipeDetails);
 
 	const openRecipeDrawer = useCallback((recipe: Recipe) => {
 		setSelectedRecipe(recipe);
@@ -78,7 +80,12 @@ export default function HomeScreen() {
 			>
 				{activeContent}
 			</AppLayout>
-			<RecipeDetailDrawer onClose={closeRecipeDrawer} open={recipeDrawerOpen} recipe={selectedRecipe} />
+			<RecipeDetailDrawer
+				detail={selectedRecipe ? recipeDetails[selectedRecipe.id] : undefined}
+				onClose={closeRecipeDrawer}
+				open={recipeDrawerOpen}
+				recipe={selectedRecipe}
+			/>
 		</>
 	);
 }

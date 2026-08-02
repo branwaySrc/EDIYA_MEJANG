@@ -8,7 +8,7 @@ import { AppSpacer } from "@/components/base/app-spacer";
 import { AppText } from "@/components/base/app-text";
 import { formatWon, getTodayInputValue, onlyDigits } from "@/components/features/paid/paid-format";
 import { AppColors, AppFonts, AppSpacing } from "@/constants/theme";
-import { getPaidCustomerBalance, getRecentUsageDate } from "@/database/paid/paid-customer";
+import { getPaidCustomerBalance, getRecentUsageDate, isPaidLedgerDebit } from "@/database/paid/paid-customer";
 import type { CreatePaidLedgerEntryInput, PaidCustomer } from "@/database/paid/paid-customer.type";
 
 export type PaidCustomerCardProps = {
@@ -215,8 +215,8 @@ export function PaidCustomerCard({ customer, expanded, onAddTransaction, onToggl
 														</AppText.Xs>
 													)}
 												</View>
-												<AppText.Sm color={entry.type === "correction" ? AppColors.primary : AppColors.text} style={styles.ledgerAmount}>
-													{entry.type === "correction" ? "+" : "-"}
+												<AppText.Sm color={isPaidLedgerDebit(entry) ? AppColors.text : AppColors.primary} style={styles.ledgerAmount}>
+													{isPaidLedgerDebit(entry) ? "-" : "+"}
 													{formatWon(entry.amount)}
 												</AppText.Sm>
 												<AppText.Sm bold style={styles.ledgerBalance}>

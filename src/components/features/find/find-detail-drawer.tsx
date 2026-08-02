@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon } from "@/components/base/app-icon";
@@ -10,61 +10,51 @@ import { findEntryDetailTitleLabels, type FindEntry, type FindMaterialDetailBloc
 
 export type FindDetailDrawerProps = {
 	entry?: FindEntry | null;
+	footer?: ReactNode;
 	onClose: () => void;
 	open: boolean;
 };
 
 const drawerWidth = 500;
+const fallbackFindImage = require("../../../../assets/images/skeleton/fallbackImg.jpg") as ImageSourcePropType;
 
-
-function MaterialImageList({ block }: { block: FindMaterialDetailBlock }) {
-	if (!block.images || block.images.length === 0) {
-		return null;
-	}
-
-	return (
-		<View style={styles.materialImageList}>
-			{block.images.map(image => (
-				<View key={image.id} style={styles.materialImageCard}>
-					<Image accessibilityLabel={image.alt} resizeMode="cover" source={image.source} style={styles.materialImage} />
-					{image.title && (
-						<AppText.Xs bold color={AppColors.sub} numberOfLines={1} style={styles.materialImageTitle}>
-							{image.title}
-						</AppText.Xs>
-					)}
-				</View>
-			))}
-		</View>
-	);
+function getFindImageSource(image: FindMaterialDetailImage) {
+	return image.image ?? image.source ?? fallbackFindImage;
 }
 
-
-function PosImageList({ images }: { images: FindMaterialDetailImage[] }) {
+function FindImageGrid({ emptyMessage, images }: { emptyMessage?: string; images: FindMaterialDetailImage[] }) {
 	if (images.length === 0) {
 		return (
-			<View style={styles.posImagePlaceholder}>
+			<View style={styles.imagePlaceholder}>
 				<AppIcon.Lg color={AppColors.primary} name="image-outline" pressable={false} />
-				<AppText.Sm color={AppColors.sub}>POS 이미지를 등록할 수 있습니다.</AppText.Sm>
+				<AppText.Sm color={AppColors.sub}>{emptyMessage ?? "이미지를 등록할 수 있습니다."}</AppText.Sm>
 			</View>
 		);
 	}
 
 	return (
-		<View style={styles.posImageList}>
-			{images.map(image => (
-				<View key={image.id} style={styles.posImageCard}>
-					<Image accessibilityLabel={image.alt} resizeMode="cover" source={image.source} style={styles.posImage} />
-					{image.title && (
-						<AppText.Sm bold color={AppColors.sub} numberOfLines={1} style={styles.materialImageTitle}>
-							{image.title}
-						</AppText.Sm>
-					)}
-				</View>
-			))}
+		<View style={styles.imageGrid}>
+			{images.map(image => {
+				const imageSource = getFindImageSource(image);
+				const accessibilityLabel = image.alt ?? image.title;
+
+				return (
+					<View key={image.id} style={styles.imageGridCard}>
+						<Image accessibilityLabel={accessibilityLabel} resizeMode="cover" source={imageSource} style={styles.imageGridImage} />
+						<View style={styles.imageGridTextArea}>
+							{image.title && (
+								<AppText.Sm bold numberOfLines={1} style={styles.imageGridTitle}>
+									{image.title}
+								</AppText.Sm>
+							)}
+							{image.desc && <AppText.Sm color={AppColors.sub}>{image.desc}</AppText.Sm>}
+						</View>
+					</View>
+				);
+			})}
 		</View>
 	);
 }
-
 
 function MaterialBlockList({ blocks }: { blocks: FindMaterialDetailBlock[] }) {
 	return (
@@ -74,13 +64,12 @@ function MaterialBlockList({ blocks }: { blocks: FindMaterialDetailBlock[] }) {
 					<View style={styles.materialBlockText}>
 						<AppText.Base bold>{block.title}</AppText.Base>
 					</View>
-					<MaterialImageList block={block} />
+					<FindImageGrid images={block.images ?? []} />
 				</View>
 			))}
 		</View>
 	);
 }
-
 
 function PosPath({ path }: { path: string[] }) {
 	return (
@@ -99,7 +88,7 @@ function PosPath({ path }: { path: string[] }) {
 	);
 }
 
-export function FindDetailDrawer({ entry, onClose, open }: FindDetailDrawerProps) {
+export function FindDetailDrawer({ entry, footer, onClose, open }: FindDetailDrawerProps) {
 	const insets = useSafeAreaInsets();
 	const [progress] = useState(() => new Animated.Value(open ? 1 : 0));
 
@@ -163,7 +152,7 @@ export function FindDetailDrawer({ entry, onClose, open }: FindDetailDrawerProps
 									<MaterialBlockList blocks={entry.storageLocations} />
 								</RecipeDetailSection>
 								{entry.notes && (
-									<RecipeDetailSection title="메모">
+									<RecipeDetailSection title="Memo">
 										<View style={styles.sectionInner}>
 											<AppText.Base>{entry.notes}</AppText.Base>
 										</View>
@@ -174,7 +163,7 @@ export function FindDetailDrawer({ entry, onClose, open }: FindDetailDrawerProps
 							<>
 								<RecipeDetailSection title="POS 위치">
 									<View style={styles.sectionInner}>
-										<PosImageList images={entry.posImages} />
+										<FindImageGrid emptyMessage="POS 이미지를 등록할 수 있습니다." images={entry.posImages} />
 									</View>
 								</RecipeDetailSection>
 								<RecipeDetailSection title="누르는 순서">
@@ -183,7 +172,7 @@ export function FindDetailDrawer({ entry, onClose, open }: FindDetailDrawerProps
 									</View>
 								</RecipeDetailSection>
 								{entry.notes && (
-									<RecipeDetailSection title="메모">
+									<RecipeDetailSection title="Memo">
 										<View style={styles.sectionInner}>
 											<AppText.Base>{entry.notes}</AppText.Base>
 										</View>
@@ -191,6 +180,7 @@ export function FindDetailDrawer({ entry, onClose, open }: FindDetailDrawerProps
 								)}
 							</>
 						)}
+						{footer}
 					</ScrollView>
 				</SafeAreaView>
 			</Animated.View>
@@ -274,40 +264,35 @@ const styles = StyleSheet.create({
 	materialBlockText: {
 		gap: AppSpacing.xs,
 	},
-	materialImageList: {
+	imageGrid: {
 		width: "100%",
+		flexDirection: "row",
+		flexWrap: "wrap",
 		gap: AppSpacing.sm,
 	},
-	materialImageCard: {
-		width: "100%",
-		gap: AppSpacing.sm,
+	imageGridCard: {
+		width: "48%",
+		minWidth: 0,
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
+		backgroundColor: AppColors.background,
 	},
-	materialImage: {
+	imageGridImage: {
 		width: "100%",
-		aspectRatio: 16 / 9,
-		borderRadius: 4,
+		aspectRatio: 1,
 		backgroundColor: "rgba(71, 85, 105, 0.1)",
 	},
-	materialImageTitle: {
+	imageGridTextArea: {
+		gap: AppSpacing.xs,
+		paddingHorizontal: AppSpacing.sm,
+		paddingVertical: AppSpacing.sm,
+	},
+	imageGridTitle: {
 		textAlign: "left",
 	},
-	posImageList: {
-		width: "100%",
-		gap: AppSpacing.sm,
-	},
-	posImageCard: {
-		width: "100%",
-		gap: AppSpacing.sm,
-	},
-	posImage: {
-		width: "100%",
-		aspectRatio: 16 / 9,
-		borderRadius: 4,
-		backgroundColor: "rgba(71, 85, 105, 0.1)",
-	},
-	posImagePlaceholder: {
-		width: "100%",
-		aspectRatio: 16 / 9,
+	imagePlaceholder: {
+		width: "48%",
+		aspectRatio: 1,
 		alignItems: "center",
 		justifyContent: "center",
 		gap: AppSpacing.sm,

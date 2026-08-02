@@ -1,7 +1,8 @@
-import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
-import { bakerySubCategories, type Recipe, sampleRecipes } from "@/database/recipe/recipe";
+import { useMemo } from "react";
 
-const bakeryRecipes = sampleRecipes.filter(recipe => recipe.category === "베이커리");
+import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
+import { bakerySubCategories, type Recipe } from "@/database/recipe/recipe";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type BakeryContentProps = {
 	contentBottomInset?: number;
@@ -9,6 +10,9 @@ export type BakeryContentProps = {
 };
 
 export function BakeryContent({ contentBottomInset = 0, onPressRecipe }: BakeryContentProps) {
+	const recipes = useContentManagementStore(state => state.recipes);
+	const bakeryRecipes = useMemo(() => recipes.filter(recipe => recipe.category === "베이커리"), [recipes]);
+
 	return (
 		<RecipeGroupList
 			contentBottomInset={contentBottomInset}

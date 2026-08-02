@@ -5,10 +5,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
-import { attendanceStatusLabels, shiftColors } from "@/components/features/employee/attendance/attendance-ui";
+import {
+	attendanceStatusLabels,
+	formatMinutesAsNumericHours,
+	shiftColors,
+} from "@/components/features/employee/attendance/attendance-ui";
+import { AttendanceDurationPicker } from "@/components/features/employee/attendance/calendar/attendance-duration-picker";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { AttendanceScheduleEntry } from "@/database/employee/attendance.type";
-import { sampleEmployees } from "@/database/employee/employee";
+import type { Employee } from "@/database/employee/employee.type";
 import {
 	buildAttendanceGreeting,
 	type AttendanceFeedbackPayload,
@@ -25,7 +31,22 @@ export type AttendanceDayPopupProps = {
 	todayKey: string;
 };
 
-function getSubstituteCandidates(entry: AttendanceScheduleEntry, entries: AttendanceScheduleEntry[]) {
+type PendingRegistration =
+	| {
+			entry: AttendanceScheduleEntry;
+			mode: "attendance";
+	  }
+	| {
+			entry: AttendanceScheduleEntry;
+			mode: "substitute";
+			substituteEmployee: Employee;
+	  };
+
+function getSubstituteCandidates(
+	entry: AttendanceScheduleEntry,
+	entries: AttendanceScheduleEntry[],
+	employees: Employee[],
+) {
 	const unavailableEmployeeIds = new Set(
 		entries.flatMap(dayEntry => [
 			dayEntry.employeeId,
@@ -33,7 +54,7 @@ function getSubstituteCandidates(entry: AttendanceScheduleEntry, entries: Attend
 		]),
 	);
 
-	return sampleEmployees
+	return employees
 		.filter(employee => employee.id !== entry.employeeId && !unavailableEmployeeIds.has(employee.id))
 		.sort((left, right) => {
 			const leftPriority = left.shiftGroup === entry.shiftGroup ? 0 : 1;
@@ -50,11 +71,13 @@ export function AttendanceDayPopup({
 	onFeedback,
 	todayKey,
 }: AttendanceDayPopupProps) {
+	const employees = useAttendanceEmployees();
 	const registerAttendance = useAttendanceStore(state => state.registerAttendance);
 	const cancelAttendance = useAttendanceStore(state => state.cancelAttendance);
 	const registerSubstitute = useAttendanceStore(state => state.registerSubstitute);
 	const cancelSubstitute = useAttendanceStore(state => state.cancelSubstitute);
 	const [selectingSubstituteForId, setSelectingSubstituteForId] = useState<string | null>(null);
+	const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
 	const [toastMessage, setToastMessage] = useState<string | null>(null);
 	const [toastProgress] = useState(() => new Animated.Value(0));
 	const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +133,7 @@ export function AttendanceDayPopup({
 		toastProgress.setValue(0);
 		setToastMessage(null);
 		setSelectingSubstituteForId(null);
+		setPendingRegistration(null);
 		onClose();
 	}, [onClose, toastProgress]);
 
@@ -124,16 +148,17 @@ export function AttendanceDayPopup({
 				return;
 			}
 
-			const greeting = buildAttendanceGreeting({ entry, monthEntries });
-			registerAttendance(entry);
-			handleClose();
-			onFeedback(greeting);
+			setSelectingSubstituteForId(null);
+			setPendingRegistration({
+				entry,
+				mode: "attendance",
+			});
 		},
-		[handleClose, monthEntries, onFeedback, registerAttendance, todayKey],
+		[handleClose, onFeedback, todayKey],
 	);
 
 	const handleSubstituteRegistration = useCallback(
-		(entry: AttendanceScheduleEntry, substituteEmployee: { id: string; name: string }) => {
+		(entry: AttendanceScheduleEntry, substituteEmployee: Employee) => {
 			if (entry.workDate > todayKey) {
 				handleClose();
 				onFeedback({
@@ -143,16 +168,49 @@ export function AttendanceDayPopup({
 				return;
 			}
 
+			setPendingRegistration({
+				entry,
+				mode: "substitute",
+				substituteEmployee,
+			});
+		},
+		[handleClose, onFeedback, todayKey],
+	);
+
+	const handleRegistrationConfirmation = useCallback(
+		(confirmedWorkMinutes: number) => {
+			if (!pendingRegistration) {
+				return;
+			}
+
+			const { entry } = pendingRegistration;
+			const substituteEmployee =
+				pendingRegistration.mode === "substitute"
+					? pendingRegistration.substituteEmployee
+					: undefined;
 			const greeting = buildAttendanceGreeting({
 				entry,
 				monthEntries,
 				substituteEmployee,
 			});
-			registerSubstitute(entry, substituteEmployee.id);
+
+			if (substituteEmployee) {
+				registerSubstitute(entry, substituteEmployee.id, confirmedWorkMinutes);
+			} else {
+				registerAttendance(entry, confirmedWorkMinutes);
+			}
+
 			handleClose();
 			onFeedback(greeting);
 		},
-		[handleClose, monthEntries, onFeedback, registerSubstitute, todayKey],
+		[
+			handleClose,
+			monthEntries,
+			onFeedback,
+			pendingRegistration,
+			registerAttendance,
+			registerSubstitute,
+		],
 	);
 
 	const handleSubstituteSelection = useCallback(
@@ -200,8 +258,15 @@ export function AttendanceDayPopup({
 								entries.map(entry => {
 									const completed = entry.status === "completed";
 									const hasSubstitute = Boolean(entry.substituteEmployeeId);
+									const confirmedWorkMinutes = completed
+										? hasSubstitute
+											? entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes
+											: entry.confirmedWorkMinutes ?? entry.scheduledMinutes
+										: null;
 									const selectingSubstitute = selectingSubstituteForId === entry.id;
-									const candidates = selectingSubstitute ? getSubstituteCandidates(entry, entries) : [];
+									const candidates = selectingSubstitute
+										? getSubstituteCandidates(entry, entries, employees)
+										: [];
 
 									return (
 										<View key={entry.id} style={styles.employeeRow}>
@@ -216,10 +281,18 @@ export function AttendanceDayPopup({
 														>
 															{entry.employeeName}
 														</AppText.Base>
+														{!hasSubstitute && confirmedWorkMinutes !== null && (
+															<AppText.Base bold color={AppColors.primary}>
+																({formatMinutesAsNumericHours(confirmedWorkMinutes)})
+															</AppText.Base>
+														)}
 														{entry.substituteEmployeeName && (
 															<View style={styles.substituteBadge}>
 																<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
 																	{entry.substituteEmployeeName}
+																	{confirmedWorkMinutes !== null
+																		? ` (${formatMinutesAsNumericHours(confirmedWorkMinutes)})`
+																		: ""}
 																</AppText.Xs>
 															</View>
 														)}
@@ -373,6 +446,20 @@ export function AttendanceDayPopup({
 						</Animated.View>
 					</View>
 				)}
+
+				{pendingRegistration && (
+					<AttendanceDurationPicker
+						employeeName={
+							pendingRegistration.mode === "substitute"
+								? pendingRegistration.substituteEmployee.name
+								: pendingRegistration.entry.employeeName
+						}
+						initialMinutes={pendingRegistration.entry.scheduledMinutes}
+						mode={pendingRegistration.mode}
+						onCancel={() => setPendingRegistration(null)}
+						onConfirm={handleRegistrationConfirmation}
+					/>
+				)}
 			</View>
 		</Modal>
 	);
@@ -464,7 +551,7 @@ const styles = StyleSheet.create({
 		textDecorationLine: "line-through",
 	},
 	substituteBadge: {
-		maxWidth: 112,
+		maxWidth: 160,
 		minHeight: 24,
 		alignItems: "center",
 		justifyContent: "center",

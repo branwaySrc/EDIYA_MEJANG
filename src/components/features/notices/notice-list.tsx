@@ -1,10 +1,10 @@
 import { type Href, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { NoticeItem } from "@/components/features/notices/notice-item";
 import { AppSpacing } from "@/constants/theme";
-import { fetchNotices, getNoticesSnapshot, type Notice } from "@/database/notices/notice";
+import type { Notice } from "@/database/notices/notice";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type NoticeListProps = {
 	notices?: Notice[];
@@ -12,26 +12,8 @@ export type NoticeListProps = {
 
 export function NoticeList({ notices }: NoticeListProps) {
 	const router = useRouter();
-	const [noticeList, setNoticeList] = useState(notices ?? getNoticesSnapshot());
-	const currentNotices = notices ?? noticeList;
-
-	useEffect(() => {
-		if (notices) {
-			return;
-		}
-
-		let mounted = true;
-
-		void fetchNotices().then(nextNotices => {
-			if (mounted) {
-				setNoticeList(nextNotices);
-			}
-		});
-
-		return () => {
-			mounted = false;
-		};
-	}, [notices]);
+	const managedNotices = useContentManagementStore(state => state.notices);
+	const currentNotices = notices ?? managedNotices;
 
 	return (
 		<View style={styles.container}>

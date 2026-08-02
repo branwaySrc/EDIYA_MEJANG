@@ -1,39 +1,24 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/base/app-text";
 import { EmployeeCard } from "@/components/features/employee/employee-card";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { fetchEmployeeDirectory, getEmployeeDirectorySnapshot } from "@/database/employee/employee";
+import { buildEmployeeDirectory } from "@/database/employee/employee";
 import type { Employee, EmployeeSection } from "@/database/employee/employee.type";
+import { useEmployeeManagementStore } from "@/store/employee-management-store";
 
 export type EmployeeViewProps = {
 	owner?: Employee;
+	onPressEmployee?: (employee: Employee) => void;
 	sections?: EmployeeSection[];
 };
 
-export function EmployeeView({ owner, sections }: EmployeeViewProps) {
-	const [directory, setDirectory] = useState(getEmployeeDirectorySnapshot);
+export function EmployeeView({ onPressEmployee, owner, sections }: EmployeeViewProps) {
+	const records = useEmployeeManagementStore(state => state.records);
+	const directory = useMemo(() => buildEmployeeDirectory(records), [records]);
 	const currentOwner = owner ?? directory.owner;
 	const currentSections = sections ?? directory.sections;
-
-	useEffect(() => {
-		if (owner || sections) {
-			return;
-		}
-
-		let mounted = true;
-
-		void fetchEmployeeDirectory().then(nextDirectory => {
-			if (mounted) {
-				setDirectory(nextDirectory);
-			}
-		});
-
-		return () => {
-			mounted = false;
-		};
-	}, [owner, sections]);
 
 	return (
 		<View style={styles.container}>
@@ -58,7 +43,10 @@ export function EmployeeView({ owner, sections }: EmployeeViewProps) {
 					<View style={styles.employeeGrid}>
 						{section.employees.map(employee => (
 							<View key={employee.id} style={styles.employeeGridItem}>
-								<EmployeeCard employee={employee} />
+								<EmployeeCard
+									employee={employee}
+									onPress={onPressEmployee ? () => onPressEmployee(employee) : undefined}
+								/>
 							</View>
 						))}
 					</View>

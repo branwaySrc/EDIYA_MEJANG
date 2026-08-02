@@ -7,7 +7,7 @@ export default function HiringSummaryScreen() {
 	const router = useRouter();
 
 	return (
-		<AppLayout drawerEnabled={false} leadingMode="back" onPressBack={() => router.back()} title="주요 요약" type="scrollview">
+		<AppLayout drawerEnabled={false} leadingMode="back" onPressBack={() => router.back()} title="계약서 요약" type="scrollview">
 			<HiringSummaryView />
 		</AppLayout>
 	);

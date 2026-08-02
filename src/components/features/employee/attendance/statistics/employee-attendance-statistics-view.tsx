@@ -6,11 +6,11 @@ import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { shiftColors } from "@/components/features/employee/attendance/attendance-ui";
 import { AttendanceSummaryMetrics } from "@/components/features/employee/attendance/statistics/attendance-summary-metrics";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { useKoreaToday } from "@/components/features/employee/attendance/use-korea-today";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import { fetchAttendanceMonthArchive } from "@/database/employee/attendance-history";
 import type { EmployeeAttendanceSummary } from "@/database/employee/attendance.type";
-import { sampleEmployees } from "@/database/employee/employee";
 import { buildEmployeeAttendanceMonthSummary } from "@/lib/attendance-schedule";
 import {
 	addCalendarMonths,
@@ -64,23 +64,27 @@ function StatisticsFallback({ error = false }: { error?: boolean }) {
 }
 
 export function EmployeeAttendanceStatisticsView({ employeeId, monthKey, onChangeMonth }: EmployeeAttendanceStatisticsViewProps) {
+	const employees = useAttendanceEmployees();
 	const todayKey = useKoreaToday();
 	const currentMonth = useMemo(() => getCalendarMonth(todayKey), [todayKey]);
 	const currentMonthKey = useMemo(() => formatCalendarMonthKey(currentMonth), [currentMonth]);
 	const selectedMonth = useMemo(() => parseCalendarMonthKey(monthKey) ?? currentMonth, [currentMonth, monthKey]);
 	const isCurrentMonth = monthKey === currentMonthKey;
-	const employee = useMemo(() => sampleEmployees.find(item => item.id === employeeId), [employeeId]);
+	const employee = useMemo(
+		() => employees.find(item => item.id === employeeId),
+		[employeeId, employees],
+	);
 	const liveRecords = useAttendanceStore(state => state.records);
 	const liveSummary = useMemo(
 		() =>
 			buildEmployeeAttendanceMonthSummary({
 				...currentMonth,
 				employeeId,
-				employees: sampleEmployees,
+				employees,
 				records: liveRecords,
 				todayKey,
 			}),
-		[currentMonth, employeeId, liveRecords, todayKey],
+		[currentMonth, employeeId, employees, liveRecords, todayKey],
 	);
 	const [archiveState, setArchiveState] = useState<ArchiveStatisticsState>({
 		monthKey,
@@ -108,7 +112,7 @@ export function EmployeeAttendanceStatisticsView({ employeeId, monthKey, onChang
 				const summary = buildEmployeeAttendanceMonthSummary({
 					...selectedMonth,
 					employeeId,
-					employees: sampleEmployees,
+					employees,
 					records: archive.records,
 					todayKey: getCalendarMonthLastDateKey(selectedMonth),
 				});
@@ -124,7 +128,7 @@ export function EmployeeAttendanceStatisticsView({ employeeId, monthKey, onChang
 		return () => {
 			active = false;
 		};
-	}, [employeeId, isCurrentMonth, monthKey, selectedMonth]);
+	}, [employeeId, employees, isCurrentMonth, monthKey, selectedMonth]);
 
 	const visibleState: ArchiveStatisticsState = isCurrentMonth
 		? liveSummary

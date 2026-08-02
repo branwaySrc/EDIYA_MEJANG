@@ -5,28 +5,34 @@ import { StyleSheet, View } from "react-native";
 import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
+import { HiringStepFrame } from "@/components/features/sajang/hiring/hiring-form-ui";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import { useHiringContractStore } from "@/store/hiring-contract-store";
 
 export const HiringCompleteView = memo(function HiringCompleteView() {
 	const router = useRouter();
 	const result = useHiringContractStore(state => state.result);
+	const contracts = useHiringContractStore(state => state.contracts);
 	const resetDraft = useHiringContractStore(state => state.resetDraft);
 
-	const startNewHiring = () => {
+	const goToStart = () => {
 		resetDraft();
-		router.dismissTo("/sajang/hiring/register" as Href);
+		router.dismissTo("/sajang/home" as Href);
 	};
 
 	return (
-		<View style={styles.container}>
+		<HiringStepFrame
+			step={7}
+			title="PDF 저장 및 직원 등록 완료"
+			subtitle="PDF 파일은 다운로드 폴더에 저장되고, 계약서 기록은 앱 로컬 저장소에 보관됩니다."
+		>
 			<View style={styles.completeCard}>
 				<AppIcon.Xl color={AppColors.primary} name="checkmark-circle-outline" pressable={false} />
 				<AppText.Xl bold color={AppColors.primary} style={styles.centerText}>
-					계약서 처리가 완료됐어요
+					신규고용 처리가 완료되었습니다
 				</AppText.Xl>
 				<AppText.Sm color={AppColors.sub} style={styles.centerText}>
-					PDF는 태블릿 로컬 저장소에 저장되었고, 이메일 앱이 열렸다면 첨부된 계약서를 직접 발송하면 됩니다.
+					파일 관리자에서 바로 확인할 수 있도록 선택한 다운로드 폴더에 PDF가 저장되었습니다.
 				</AppText.Sm>
 			</View>
 
@@ -39,45 +45,46 @@ export const HiringCompleteView = memo(function HiringCompleteView() {
 				</View>
 				<View style={styles.row}>
 					<AppText.Xs bold color={AppColors.sub} style={styles.label}>
-						PDF 경로
+						PDF
 					</AppText.Xs>
 					<AppText.Sm style={styles.value}>{result?.pdfUri ?? "없음"}</AppText.Sm>
 				</View>
 				<View style={styles.row}>
 					<AppText.Xs bold color={AppColors.sub} style={styles.label}>
-						Storage
+						저장 위치
 					</AppText.Xs>
-					<AppText.Sm style={styles.value}>{result?.storagePath ?? "추후 업로드 예정"}</AppText.Sm>
+					<AppText.Sm style={styles.value}>{result?.storagePath ?? "없음"}</AppText.Sm>
+				</View>
+				<View style={styles.row}>
+					<AppText.Xs bold color={AppColors.sub} style={styles.label}>
+						기록 저장
+					</AppText.Xs>
+					<AppText.Sm style={styles.value}>앱 로컬 스토리지 / {contracts.length}건</AppText.Sm>
+				</View>
+				<View style={styles.row}>
+					<AppText.Xs bold color={AppColors.sub} style={styles.label}>
+						Metadata
+					</AppText.Xs>
+					<AppText.Sm style={styles.value}>{result?.metadataUri ?? "없음"}</AppText.Sm>
 				</View>
 			</View>
 
 			<View style={styles.actions}>
-				<AppPressable onPress={() => router.dismissTo("/sajang/home" as Href)} pressedColor="rgba(0, 75, 147, 0.08)" radius="base" style={styles.secondaryButton}>
-					<AppText.Base bold color={AppColors.primary}>
-						사장님 공간
-					</AppText.Base>
-				</AppPressable>
-				<AppPressable onPress={startNewHiring} pressedColor="#003E7A" radius="base" style={styles.primaryButton}>
+				<AppPressable onPress={goToStart} pressedColor="#003E7A" radius="base" style={styles.primaryButton}>
 					<AppText.Base bold color={AppColors.textOnPrimary}>
-						신규고용 다시
+						처음으로 가기
 					</AppText.Base>
 				</AppPressable>
 			</View>
-		</View>
+		</HiringStepFrame>
 	);
 });
 
 export default HiringCompleteView;
 
 const styles = StyleSheet.create({
-	container: {
-		width: "100%",
-		gap: AppSpacing.md,
-		padding: AppSpacing.md,
-		paddingBottom: AppSpacing.xl,
-	},
 	completeCard: {
-		minHeight: 220,
+		minHeight: 210,
 		alignItems: "center",
 		justifyContent: "center",
 		gap: AppSpacing.sm,
@@ -113,23 +120,13 @@ const styles = StyleSheet.create({
 		padding: AppSpacing.sm,
 	},
 	actions: {
-		flexDirection: "row",
-		gap: AppSpacing.sm,
+		width: "100%",
 	},
 	primaryButton: {
-		flex: 1,
-		minHeight: 50,
+		width: "100%",
+		minHeight: 56,
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: AppColors.primary,
-	},
-	secondaryButton: {
-		flex: 1,
-		minHeight: 50,
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: 1,
-		borderColor: AppColors.primary,
-		backgroundColor: AppColors.background,
 	},
 });

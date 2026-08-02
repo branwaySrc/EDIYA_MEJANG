@@ -10,6 +10,7 @@ import {
 
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
+import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { SearchBox } from "@/components/ui/search/search-box";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type {
@@ -17,7 +18,6 @@ import type {
 	AttendanceLogRecord,
 	AttendanceRecord,
 } from "@/database/employee/attendance.type";
-import { sampleEmployees } from "@/database/employee/employee";
 import type { Employee, EmployeeShiftGroup } from "@/database/employee/employee.type";
 import { koreaTimeZone } from "@/lib/korea-date";
 import { useAttendanceStore } from "@/store/attendance-store";
@@ -189,14 +189,15 @@ const AttendanceLogRow = memo(function AttendanceLogRow({ item }: { item: Attend
 });
 
 export function AttendanceLogView() {
+	const employees = useAttendanceEmployees();
 	const [keyword, setKeyword] = useState("");
 	const [searchMode, setSearchMode] = useState<LogSearchMode>("name");
 	const deferredKeyword = useDeferredValue(keyword);
 	const records = useAttendanceStore(state => state.records);
 	const storeLogs = useAttendanceStore(state => state.logs);
 	const employeesById = useMemo(
-		() => new Map(sampleEmployees.map(employee => [employee.id, employee])),
-		[],
+		() => new Map(employees.map(employee => [employee.id, employee])),
+		[employees],
 	);
 	const attendanceById = useMemo(
 		() => new Map(records.map(record => [record.id, record])),

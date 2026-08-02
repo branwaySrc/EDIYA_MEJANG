@@ -56,7 +56,6 @@ function createScheduleEntry(
 		id: record?.id ?? `schedule-${workDate}-${employee.id}`,
 		employeeId: employee.id,
 		employeeName: employee.name,
-		kakaoName: employee.kakaoName,
 		shiftGroup: employee.shiftGroup,
 		workDate,
 		scheduledStart,
@@ -68,7 +67,6 @@ function createScheduleEntry(
 		confirmedWorkMinutes: record?.confirmedWorkMinutes,
 		substituteEmployeeId: record?.substituteEmployeeId,
 		substituteEmployeeName: substituteEmployee?.name,
-		substituteKakaoName: substituteEmployee?.kakaoName,
 		substituteCheckedInAt: record?.substituteCheckedInAt,
 		substituteConfirmedWorkMinutes: record?.substituteConfirmedWorkMinutes,
 		updatedByEmployeeId: record?.updatedByEmployeeId ?? employee.id,
@@ -238,7 +236,11 @@ export function buildAttendanceMonthSummary(
 		missedShiftCount: missedEntries.length,
 		contractedMinutes: entries.reduce((total, entry) => total + entry.scheduledMinutes, 0),
 		completedMinutes: completedEntries.reduce(
-			(total, entry) => total + (entry.confirmedWorkMinutes ?? entry.scheduledMinutes),
+			(total, entry) =>
+				total +
+				(entry.substituteEmployeeId
+					? entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes
+					: entry.confirmedWorkMinutes ?? entry.scheduledMinutes),
 			0,
 		),
 		missedMinutes: missedEntries.reduce((total, entry) => total + entry.scheduledMinutes, 0),

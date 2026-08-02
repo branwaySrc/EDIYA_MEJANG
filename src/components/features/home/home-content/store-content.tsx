@@ -1,10 +1,12 @@
 import LottieView from "lottie-react-native";
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/base/app-text";
 import { RecipeSectionList } from "@/components/features/home/recipe-section-list";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Recipe } from "@/database/recipe/recipe.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 import { useSavedRecipesStore } from "@/store/saved-recipes-store";
 
 const coffeeMachineAnimation = require("../../../../../assets/animate-icon/coffee-machine.json");
@@ -15,8 +17,13 @@ export type StoreContentProps = {
 };
 
 export function StoreContent({ contentBottomInset = 0, onPressRecipe }: StoreContentProps) {
-	const recipes = useSavedRecipesStore(state => state.recipes);
+	const savedRecipeIds = useSavedRecipesStore(state => state.savedRecipeIds);
 	const removeRecipe = useSavedRecipesStore(state => state.removeRecipe);
+	const allRecipes = useContentManagementStore(state => state.recipes);
+	const recipes = useMemo(
+		() => allRecipes.filter(recipe => savedRecipeIds.includes(recipe.id)),
+		[allRecipes, savedRecipeIds],
+	);
 
 	if (recipes.length === 0) {
 		return (

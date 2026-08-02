@@ -3,11 +3,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { DefaultTheme, Stack, ThemeProvider, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef } from "react";
-import { BackHandler, Platform, ToastAndroid } from "react-native";
+import { BackHandler, Platform, StyleSheet, ToastAndroid, View } from "react-native";
 
+import { AppToast } from "@/components/ui/app-toast";
 import { AppColors } from "@/constants/theme";
-import { initializeLocalRecipeDatabaseAsync } from "@/lib/recipes/local-recipe-sync";
-import { useSajangAuthStore } from "@/store/sajang-auth-store";
+import { initializeLocalContentPackDatabaseAsync } from "@/lib/content-pack/local-content-pack";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,7 +30,6 @@ const appTheme = {
 export default function RootLayout() {
 	const pathname = usePathname();
 	const router = useRouter();
-	const lockSajang = useSajangAuthStore(state => state.lock);
 	const lastAndroidBackPressRef = useRef(0);
 	const [fontsLoaded, fontError] = useFonts({
 		Inter_400Regular,
@@ -45,16 +44,10 @@ export default function RootLayout() {
 	}, [fontsLoaded, fontError]);
 
 	useEffect(() => {
-		initializeLocalRecipeDatabaseAsync().catch(error => {
-			console.error("Failed to initialize local recipe database.", error);
+		initializeLocalContentPackDatabaseAsync().catch(error => {
+			console.error("Failed to initialize local content pack database.", error);
 		});
 	}, []);
-
-	useEffect(() => {
-		if (!pathname.startsWith("/sajang")) {
-			lockSajang();
-		}
-	}, [lockSajang, pathname]);
 
 	useEffect(() => {
 		lastAndroidBackPressRef.current = 0;
@@ -91,12 +84,21 @@ export default function RootLayout() {
 
 	return (
 		<ThemeProvider value={appTheme}>
-			<Stack
-				screenOptions={{
-					contentStyle: { backgroundColor: AppColors.background },
-					headerShown: false,
-				}}
-			/>
+			<View style={styles.root}>
+				<Stack
+					screenOptions={{
+						contentStyle: { backgroundColor: AppColors.background },
+						headerShown: false,
+					}}
+				/>
+				<AppToast />
+			</View>
 		</ThemeProvider>
 	);
 }
+
+const styles = StyleSheet.create({
+	root: {
+		flex: 1,
+	},
+});

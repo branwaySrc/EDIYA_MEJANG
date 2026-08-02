@@ -2,8 +2,7 @@ import { type Href, useRouter } from "expo-router";
 import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { AppIcon } from "@/components/base/app-icon";
-import type { AppIconProps } from "@/components/base/app-icon";
+import { AppIcon, type AppIconProps } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
@@ -13,38 +12,45 @@ type HomeAction = {
 	icon: AppIconProps["name"];
 	label: string;
 	route?: Href;
+	type?: "action";
 };
 
 const homeActions: HomeAction[] = [
 	{
 		icon: "person-add-outline",
 		label: "신규고용",
+		type: "action",
 		route: "/sajang/hiring/register" as Href,
 	},
 	{
-		disabled: true,
-		icon: "folder-open-outline",
-		label: "계약서 보관함",
+		icon: "people-outline",
+		label: "직원관리",
+		type: "action",
+		route: "/sajang/employees" as Href,
 	},
 	{
-		disabled: true,
-		icon: "ribbon-outline",
-		label: "직원 등급관리",
+		icon: "add-circle-outline",
+		label: "메뉴추가",
+		type: "action",
+		route: "/sajang/menu-add" as Href,
 	},
 	{
-		disabled: true,
+		icon: "chatbubble-outline",
+		label: "공지사항 및 메뉴얼",
+		type: "action",
+		route: "/sajang/notices" as Href,
+	},
+	{
+		icon: "business-outline",
+		label: "거래처 등록",
+		type: "action",
+		route: "/sajang/vendors" as Href,
+	},
+	{
 		icon: "calculator-outline",
-		label: "정산 관리",
-	},
-	{
-		disabled: true,
-		icon: "storefront-outline",
-		label: "매장 설정",
-	},
-	{
-		disabled: true,
-		icon: "ellipsis-horizontal-circle-outline",
-		label: "준비중",
+		label: "정산관리",
+		type: "action",
+		route: "/sajang/settlement" as Href,
 	},
 ];
 

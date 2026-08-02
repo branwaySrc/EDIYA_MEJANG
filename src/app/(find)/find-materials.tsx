@@ -26,9 +26,9 @@ export default function FindMaterialsScreen() {
 		<>
 			<AppLayout
 				activeDrawerId="find-materials"
+				contentStyle={styles.content}
 				title={appRoutes["find-materials"].label}
-				type="scrollview"
-				contentContainerStyle={styles.content}
+				type="view"
 				topSlot={<FindTabMenu activeId={activeTabId} onChange={setActiveTabId} />}
 			>
 				<FindView activeKind={activeTabId} onOpenEntry={openDrawer} />
@@ -40,6 +40,6 @@ export default function FindMaterialsScreen() {
 
 const styles = StyleSheet.create({
 	content: {
-		paddingBottom: 0,
+		flex: 1,
 	},
 });

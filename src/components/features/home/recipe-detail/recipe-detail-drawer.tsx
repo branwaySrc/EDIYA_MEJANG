@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,9 +9,11 @@ import { RecipeDetailSection } from "@/components/features/home/recipe-detail/re
 import { RecipeStepAccordion } from "@/components/features/home/recipe-detail/recipe-step-accordion";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Recipe } from "@/database/recipe/recipe.type";
-import { getRecipeDetail, type RecipeStep, type RecipeVisual } from "@/database/recipe/recipe-details";
+import { getRecipeDetail, type RecipeDetail, type RecipeVisual } from "@/database/recipe/recipe-details";
 
 export type RecipeDetailDrawerProps = {
+	detail?: RecipeDetail;
+	footer?: ReactNode;
 	onClose: () => void;
 	open: boolean;
 	recipe?: Recipe | null;
@@ -20,21 +22,38 @@ export type RecipeDetailDrawerProps = {
 const drawerWidth = 500;
 const fallbackRecipeImage = require("../../../../../assets/images/skeleton/fallbackImg.jpg") as ImageSourcePropType;
 
-function RecipeVisualCard({ visual, large = false }: { large?: boolean; visual: RecipeVisual }) {
-	const imageSource = visual.imageUri ? { uri: visual.imageUri } : fallbackRecipeImage;
+function getVisualDescription(visual: RecipeVisual) {
+	return visual.desc ?? visual.description;
+}
+
+function getVisualImageSource(visual: RecipeVisual) {
+	const imageUri = visual.image ?? visual.imageUri;
+
+	return imageUri ? { uri: imageUri } : fallbackRecipeImage;
+}
+
+function RecipeVisualCard({ visual }: { visual: RecipeVisual }) {
+	const imageSource = getVisualImageSource(visual);
+	const visualDescription = getVisualDescription(visual);
 
 	return (
 		<View style={styles.visualCard}>
-			<Image accessibilityLabel={visual.title} resizeMode="cover" source={imageSource} style={[styles.visualImage, large && styles.largeVisualImage]} />
+			<Image accessibilityLabel={visual.title} resizeMode="cover" source={imageSource} style={styles.visualImage} />
+			<View style={styles.visualCardTextArea}>
+				<AppText.Sm bold numberOfLines={1} style={styles.visualCardTitle}>
+					{visual.title}
+				</AppText.Sm>
+				{visualDescription && <AppText.Sm color={AppColors.sub}>{visualDescription}</AppText.Sm>}
+			</View>
 		</View>
 	);
 }
 
-function VisualList({ large = false, visuals }: { large?: boolean; visuals: RecipeVisual[] }) {
+function VisualList({ visuals }: { visuals: RecipeVisual[] }) {
 	return (
 		<View style={styles.visualList}>
 			{visuals.map(visual => (
-				<RecipeVisualCard key={visual.id} large={large} visual={visual} />
+				<RecipeVisualCard key={visual.id} visual={visual} />
 			))}
 		</View>
 	);
@@ -44,15 +63,21 @@ function HeroVisualList({ visuals }: { visuals: RecipeVisual[] }) {
 	return (
 		<View style={styles.heroVisualList}>
 			{visuals.map(visual => {
-				const imageSource = visual.imageUri ? { uri: visual.imageUri } : fallbackRecipeImage;
+				const imageSource = getVisualImageSource(visual);
+				const visualDescription = getVisualDescription(visual);
 
 				return (
 					<View key={visual.id} style={styles.heroVisualCard}>
 						<Image accessibilityLabel={visual.title} resizeMode="cover" source={imageSource} style={styles.heroVisualImage} />
 						<View style={styles.heroVisualTextArea}>
-							<AppText.Sm color={AppColors.sub} style={styles.heroVisualDescription}>
-								{visual.description}
+							<AppText.Sm bold numberOfLines={1} style={styles.visualCardTitle}>
+								{visual.title}
 							</AppText.Sm>
+							{visualDescription && (
+								<AppText.Sm color={AppColors.sub} style={styles.heroVisualDescription}>
+									{visualDescription}
+								</AppText.Sm>
+							)}
 						</View>
 					</View>
 				);
@@ -61,7 +86,7 @@ function HeroVisualList({ visuals }: { visuals: RecipeVisual[] }) {
 	);
 }
 
-function RecipeServiceAccordion({ steps, title, visuals }: { steps: RecipeStep[]; title: string; visuals: RecipeVisual[] }) {
+function RecipeServiceAccordion({ title, visuals }: { title: string; visuals: RecipeVisual[] }) {
 	const [expanded, setExpanded] = useState(false);
 
 	return (
@@ -84,21 +109,16 @@ function RecipeServiceAccordion({ steps, title, visuals }: { steps: RecipeStep[]
 					<View style={styles.sectionInner}>
 						<VisualList visuals={visuals} />
 					</View>
-					<View style={styles.stepList}>
-						{steps.map(step => (
-							<RecipeStepAccordion key={step.id} step={step} />
-						))}
-					</View>
 				</View>
 			)}
 		</View>
 	);
 }
 
-export function RecipeDetailDrawer({ onClose, open, recipe }: RecipeDetailDrawerProps) {
+export function RecipeDetailDrawer({ detail: detailOverride, footer, onClose, open, recipe }: RecipeDetailDrawerProps) {
 	const insets = useSafeAreaInsets();
 	const [progress] = useState(() => new Animated.Value(open ? 1 : 0));
-	const detail = recipe ? getRecipeDetail(recipe) : null;
+	const detail = recipe ? detailOverride ?? getRecipeDetail(recipe) : null;
 
 	useEffect(() => {
 		Animated.timing(progress, {
@@ -159,15 +179,16 @@ export function RecipeDetailDrawer({ onClose, open, recipe }: RecipeDetailDrawer
 
 						<RecipeDetailSection title="제조순서">
 							<View style={styles.stepList}>
-								{detail.steps.map(step => (
-									<RecipeStepAccordion key={step.id} step={step} />
+								{detail.steps.map((step, index) => (
+									<RecipeStepAccordion key={step.id} step={step} stepNumber={index + 1} />
 								))}
 							</View>
 						</RecipeDetailSection>
 
-						<RecipeServiceAccordion title="매장으로 준비하기" visuals={detail.storeServing} steps={detail.steps} />
-						<RecipeServiceAccordion title="포장으로 준비하기" visuals={detail.packaging} steps={detail.steps} />
-						<RecipeServiceAccordion title="배달로 준비하기" visuals={detail.delivery} steps={detail.steps} />
+						<RecipeServiceAccordion title="매장으로 준비하기" visuals={detail.storeServing} />
+						<RecipeServiceAccordion title="포장으로 준비하기" visuals={detail.packaging} />
+						<RecipeServiceAccordion title="배달로 준비하기" visuals={detail.delivery} />
+						{footer}
 					</ScrollView>
 				</SafeAreaView>
 			</Animated.View>
@@ -255,6 +276,9 @@ const styles = StyleSheet.create({
 		padding: AppSpacing.md,
 	},
 	visualList: {
+		width: "100%",
+		flexDirection: "row",
+		flexWrap: "wrap",
 		gap: AppSpacing.sm,
 	},
 	heroVisualList: {
@@ -283,22 +307,24 @@ const styles = StyleSheet.create({
 		textAlign: "left",
 	},
 	visualCard: {
-		width: "100%",
+		width: "48%",
+		minWidth: 0,
 		borderWidth: 1,
 		borderColor: "#E2E8F0",
 		backgroundColor: AppColors.background,
 	},
 	visualImage: {
 		width: "100%",
-		aspectRatio: 16 / 9,
+		aspectRatio: 1,
 		backgroundColor: "#EAF3FC",
-	},
-	largeVisualImage: {
-		aspectRatio: 4 / 3,
 	},
 	visualCardTextArea: {
 		gap: AppSpacing.xs,
 		padding: AppSpacing.md,
+	},
+	visualCardTitle: {
+		flex: 1,
+		minWidth: 0,
 	},
 	stepList: {
 		width: "100%",

@@ -1,7 +1,8 @@
-import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
-import { beverageSubCategories, type Recipe, sampleRecipes } from "@/database/recipe/recipe";
+import { useMemo } from "react";
 
-const beverageRecipes = sampleRecipes.filter(recipe => recipe.category === "음료");
+import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
+import { beverageSubCategories, type Recipe } from "@/database/recipe/recipe";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type BeverageContentProps = {
 	contentBottomInset?: number;
@@ -9,6 +10,9 @@ export type BeverageContentProps = {
 };
 
 export function BeverageContent({ contentBottomInset = 0, onPressRecipe }: BeverageContentProps) {
+	const recipes = useContentManagementStore(state => state.recipes);
+	const beverageRecipes = useMemo(() => recipes.filter(recipe => recipe.category === "음료"), [recipes]);
+
 	return (
 		<RecipeGroupList
 			contentBottomInset={contentBottomInset}

@@ -19,6 +19,11 @@ export function formatMinutesAsHours(minutes: number) {
 	return remainder === 0 ? `${hours}시간` : `${hours}시간 ${remainder}분`;
 }
 
+export function formatMinutesAsNumericHours(minutes: number) {
+	const hours = minutes / 60;
+	return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2)));
+}
+
 export function formatAttendanceRate(rate: number) {
 	return `${Math.round(rate * 100)}%`;
 }

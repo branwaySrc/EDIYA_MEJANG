@@ -1,6 +1,10 @@
 import type { ImageSourcePropType } from "react-native";
 
 import type { AppIconProps } from "@/components/base/app-icon";
+import type {
+	ManagedContentSection,
+	ManagedContentShiftGroup,
+} from "@/database/manual/manual.type";
 
 export type TutorialTopicSlug =
 	| "store-dispatch"
@@ -34,9 +38,12 @@ export type TutorialContentBlock =
 
 export type TutorialEntry = {
 	blocks: TutorialContentBlock[];
+	description?: string;
 	id: string;
+	sections?: ManagedContentSection[];
+	shiftGroup?: ManagedContentShiftGroup;
 	title: string;
-	topicSlug: TutorialTopicSlug;
+	topicSlug?: TutorialTopicSlug;
 };
 
 export type TutorialTopicRecord = {

@@ -14,6 +14,8 @@ export type NoticeItemProps = {
 };
 
 export function NoticeItem({ notice, onPress, showKeywords = false }: NoticeItemProps) {
+	const subtitle = [notice.shiftGroup, notice.description].filter(Boolean).join(" · ") || notice.uploadedAt;
+
 	return (
 		<AppPressable
 			accessibilityLabel={`${notice.title} 공지사항 보기`}
@@ -28,10 +30,10 @@ export function NoticeItem({ notice, onPress, showKeywords = false }: NoticeItem
 					{notice.title}
 				</AppText.Lg>
 				<AppText.Sm color={AppColors.sub} numberOfLines={1} style={styles.date}>
-					{notice.uploadedAt}
+					{subtitle}
 				</AppText.Sm>
 
-				{showKeywords && notice.keywords.length > 0 && (
+				{showKeywords && !notice.sections?.length && notice.keywords.length > 0 && (
 					<View style={styles.keywordList}>
 						{notice.keywords.map(keyword => (
 							<AppBadge key={keyword} tone="primary">

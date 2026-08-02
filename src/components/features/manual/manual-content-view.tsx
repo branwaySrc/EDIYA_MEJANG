@@ -1,41 +1,96 @@
-import { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/base/app-text";
 import { Accordion } from "@/components/ui/accordion";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import {
-	fetchManualCategory,
-	fetchManualEntriesByCategory,
-	getManualCategorySnapshot,
-	getManualEntriesByCategorySnapshot,
-} from "@/database/manual/manual";
-import type { ManualCategory, ManualEntry } from "@/database/manual/manual.type";
+import type { ManualContentBlock, ManagedContentSection } from "@/database/manual/manual.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type ManualContentViewProps = {
 	categorySlug?: string;
 };
 
-export function ManualContentView({ categorySlug }: ManualContentViewProps) {
-	const [category, setCategory] = useState<ManualCategory | undefined>(() => getManualCategorySnapshot(categorySlug));
-	const [entries, setEntries] = useState<ManualEntry[]>(() => getManualEntriesByCategorySnapshot(categorySlug));
+function renderBlocks(blocks: ManualContentBlock[]) {
+	return blocks.map(block => {
+		if (block.type === "image") {
+			return (
+				<Image
+					key={block.id}
+					accessibilityLabel={block.alt}
+					accessibilityRole="image"
+					resizeMode="cover"
+					source={block.source}
+					style={styles.image}
+				/>
+			);
+		}
 
-	useEffect(() => {
-		let mounted = true;
-
-		void Promise.all([fetchManualCategory(categorySlug), fetchManualEntriesByCategory(categorySlug)]).then(
-			([nextCategory, nextEntries]) => {
-				if (mounted) {
-					setCategory(nextCategory);
-					setEntries(nextEntries);
-				}
-			},
+		return (
+			<AppText.Sm key={block.id} color={AppColors.sub} style={styles.body}>
+				{block.body}
+			</AppText.Sm>
 		);
+	});
+}
 
-		return () => {
-			mounted = false;
-		};
-	}, [categorySlug]);
+function renderSection(section: ManagedContentSection) {
+	return (
+		<>
+			{section.desc ? (
+				<AppText.Sm color={AppColors.sub} style={styles.body}>
+					{section.desc}
+				</AppText.Sm>
+			) : null}
+			{section.imageSource ? (
+				<Image
+					accessibilityLabel={section.imageAlt ?? section.title}
+					accessibilityRole="image"
+					resizeMode="cover"
+					source={section.imageSource}
+					style={styles.image}
+				/>
+			) : null}
+		</>
+	);
+}
+
+export function ManualContentView({ categorySlug }: ManualContentViewProps) {
+	const categories = useContentManagementStore(state => state.manualCategories);
+	const allEntries = useContentManagementStore(state => state.manualEntries);
+	const directEntry = allEntries.find(entry => entry.id === categorySlug);
+	const category = categories.find(item => item.slug === categorySlug);
+	const entries = allEntries.filter(entry => entry.categorySlug === categorySlug);
+
+	if (directEntry) {
+		return (
+			<View style={styles.container}>
+				<View style={styles.header}>
+					<AppText.Xl bold color={AppColors.primary}>
+						{directEntry.title}
+					</AppText.Xl>
+					{directEntry.description || directEntry.shiftGroup ? (
+						<AppText.Sm color={AppColors.sub}>
+							{[directEntry.description, directEntry.shiftGroup].filter(Boolean).join(" · ")}
+						</AppText.Sm>
+					) : null}
+				</View>
+
+				<Accordion.List>
+					{directEntry.sections?.length ? (
+						directEntry.sections.map((section, index) => (
+							<Accordion.Item key={section.id} defaultOpen={index === 0} title={section.title || `내용 ${index + 1}`}>
+								{renderSection(section)}
+							</Accordion.Item>
+						))
+					) : (
+						<Accordion.Item defaultOpen title={directEntry.title}>
+							{renderBlocks(directEntry.blocks)}
+						</Accordion.Item>
+					)}
+				</Accordion.List>
+			</View>
+		);
+	}
 
 	if (!category) {
 		return (
@@ -60,26 +115,7 @@ export function ManualContentView({ categorySlug }: ManualContentViewProps) {
 			<Accordion.List>
 				{entries.map((entry, index) => (
 					<Accordion.Item key={entry.id} defaultOpen={index === 0} title={entry.title}>
-						{entry.blocks.map(block => {
-							if (block.type === "image") {
-								return (
-									<Image
-										key={block.id}
-										accessibilityLabel={block.alt}
-										accessibilityRole="image"
-										resizeMode="cover"
-										source={block.source}
-										style={styles.image}
-									/>
-								);
-							}
-
-							return (
-								<AppText.Sm key={block.id} color={AppColors.sub} style={styles.body}>
-									{block.body}
-								</AppText.Sm>
-							);
-						})}
+						{renderBlocks(entry.blocks)}
 					</Accordion.Item>
 				))}
 			</Accordion.List>

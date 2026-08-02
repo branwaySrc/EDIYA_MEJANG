@@ -11,10 +11,10 @@ export default function TutorialContentScreen() {
 
 	return (
 		<AppLayout
-			activeDrawerId="tutorial"
+			activeDrawerId="manual"
 			leadingMode="back"
 			onPressBack={() => router.back()}
-			title={appRoutes.tutorial.label}
+			title={appRoutes.manual.label}
 			type="scrollview"
 		>
 			<TutorialContentView topicSlug={topicSlug} />

@@ -17,7 +17,9 @@ function searchPaidCustomers(customers: PaidCustomer[], keyword: string) {
 	}
 
 	return customers.filter(customer =>
-		[customer.name, customer.nickname, customer.affiliation].some(value => value.toLowerCase().includes(normalizedKeyword)),
+		[customer.searchText, customer.name, customer.nickname, customer.affiliation, customer.phone].some(value =>
+			value?.toLowerCase().includes(normalizedKeyword),
+		),
 	);
 }
 

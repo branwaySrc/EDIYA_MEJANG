@@ -1,12 +1,18 @@
-import type { HiringContractPage, HiringDraft } from "@/components/features/sajang/hiring/hiring-types";
+import {
+	hiringDocumentKeys,
+	hiringDocumentLabels,
+	hiringOwnerName,
+	type HiringContractPage,
+	type HiringDraft,
+	type HiringSignatureImages,
+} from "@/components/features/sajang/hiring/hiring-types";
+import { formatClockMinutes } from "@/database/employee/employee";
+import { getKoreaTodayKey } from "@/lib/korea-date";
+
+type PartialHiringSignatureImages = Partial<HiringSignatureImages>;
 
 function escapeHtml(value: string) {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&#039;");
+	return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function formatWonText(value: string) {
@@ -23,27 +29,146 @@ function valueOrDash(value: string) {
 	return escapeHtml(value.trim() || "미입력");
 }
 
+function formatWorkDays(draft: HiringDraft) {
+	return draft.workDays.length > 0 ? draft.workDays.join(", ") : "미입력";
+}
+
+function formatDocumentSummary(draft: HiringDraft) {
+	return hiringDocumentKeys.map(key => `${hiringDocumentLabels[key]} ${draft.documents[key] ? "확인" : "미확인"}`).join(" / ");
+}
+
+function formatContractDate() {
+	const [year, month, day] = getKoreaTodayKey().split("-");
+
+	return `${year}년 ${Number(month)}월 ${Number(day)}일`;
+}
+
+function signatureImage(imageDataUrl?: string) {
+	if (!imageDataUrl) {
+		return "";
+	}
+
+	return `<img class="floating-signature" src="${imageDataUrl}" />`;
+}
+
 function contractStyles() {
 	return `
 		<style>
+			@page {
+				size: A4 portrait;
+				margin: 18mm 16mm;
+			}
 			* { box-sizing: border-box; }
+			html {
+				width: 210mm;
+				min-height: 297mm;
+			}
 			body {
 				margin: 0;
-				padding: 28px;
+				padding: 0;
 				color: #111827;
-				font-family: -apple-system, BlinkMacSystemFont, "Inter", "Noto Sans KR", sans-serif;
-				line-height: 1.58;
+				font-family: "Noto Serif KR", "Batang", "Times New Roman", serif;
+				font-size: 17px;
+				line-height: 1.72;
 			}
-			h1 { margin: 0 0 18px; color: #004B93; font-size: 25px; }
-			h2 { margin: 26px 0 10px; color: #004B93; font-size: 18px; }
-			p { margin: 8px 0; font-size: 14px; }
-			table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; }
-			th, td { border: 1px solid #CBD5E1; padding: 9px 10px; font-size: 13px; text-align: left; vertical-align: top; }
-			th { width: 132px; background: #F1F5F9; color: #475569; }
-			.notice { padding: 12px; background: #F8FAFC; border: 1px solid #CBD5E1; }
-			.signature { width: 220px; height: 92px; object-fit: contain; border: 1px solid #CBD5E1; }
-			.sign-row { display: flex; gap: 18px; margin-top: 24px; }
-			.sign-box { flex: 1; min-height: 140px; border: 1px solid #CBD5E1; padding: 12px; }
+			.contract-title {
+				width: 480px;
+				margin: 0 auto 34px;
+				border: 1px solid #111827;
+				padding: 8px 12px;
+				text-align: center;
+				font-size: 26px;
+				font-weight: 700;
+			}
+			.parties {
+				margin-bottom: 20px;
+				text-align: center;
+			}
+			.line {
+				display: inline-block;
+				min-width: 168px;
+				border-bottom: 1px solid #111827;
+				height: 24px;
+				vertical-align: middle;
+			}
+			ol {
+				margin: 0;
+				padding-left: 26px;
+			}
+			li {
+				margin: 7px 0;
+				padding-left: 4px;
+			}
+			.sub {
+				margin: 2px 0 2px 22px;
+			}
+			.center-date {
+				margin: 28px 0 20px;
+				text-align: center;
+				letter-spacing: 4px;
+			}
+			.sign-section {
+				margin-top: 10px;
+			}
+			.sign-list {
+				display: flex;
+				flex-direction: column;
+				gap: 12px;
+			}
+			.party-block {
+				display: flex;
+				flex-direction: row;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 18px;
+			}
+			.party-info {
+				display: grid;
+				grid-template-columns: 64px 1fr;
+				flex: 1;
+				row-gap: 6px;
+				column-gap: 6px;
+				min-width: 0;
+			}
+			.party-title {
+				grid-column: 1 / -1;
+				margin-bottom: 0;
+				font-weight: 700;
+			}
+			.party-label {
+				white-space: nowrap;
+			}
+			.party-value {
+				min-width: 0;
+			}
+			.party-signature {
+				display: flex;
+				flex-direction: row;
+				align-items: flex-end;
+				gap: 8px;
+				padding-top: 28px;
+			}
+			.sign-slot {
+				position: relative;
+				display: inline-block;
+				width: 148px;
+				height: 42px;
+				border-bottom: 1px solid #111827;
+				vertical-align: bottom;
+			}
+			.sign-text {
+				white-space: nowrap;
+			}
+			.floating-signature {
+				position: absolute;
+				left: 4px;
+				right: 4px;
+				bottom: -4px;
+				width: 140px;
+				height: 50px;
+				object-fit: contain;
+				pointer-events: none;
+			}
 			.page-break { page-break-before: always; }
 		</style>
 	`;
@@ -59,136 +184,113 @@ function pageShell(title: string, body: string) {
 				${contractStyles()}
 			</head>
 			<body>
-				<h1>${title}</h1>
+				<h1 class="contract-title">${title}</h1>
 				${body}
 			</body>
 		</html>
 	`;
 }
 
-function extractBodyHtml(html: string) {
-	const match = html.match(/<body>([\s\S]*)<\/body>/);
+function contractBody(draft: HiringDraft, signatures: PartialHiringSignatureImages = {}) {
+	const workTime = {
+		end: draft.workEndMinutes === null ? "" : formatClockMinutes(draft.workEndMinutes),
+		start: draft.workStartMinutes === null ? "" : formatClockMinutes(draft.workStartMinutes),
+	};
+	const contractDate = formatContractDate();
 
-	return match?.[1] ?? html;
-}
-
-function baseInfoTable(draft: HiringDraft) {
 	return `
-		<table>
-			<tr><th>매장명</th><td>${valueOrDash(draft.storeName)}</td></tr>
-			<tr><th>매장 주소</th><td>${valueOrDash(draft.storeAddress)}</td></tr>
-			<tr><th>매장 전화번호</th><td>${valueOrDash(draft.storePhone)}</td></tr>
-			<tr><th>사장</th><td>${valueOrDash(draft.ownerName)}</td></tr>
-			<tr><th>직원 이름</th><td>${valueOrDash(draft.employeeName)}</td></tr>
-			<tr><th>나이</th><td>${valueOrDash(draft.age)}</td></tr>
-			<tr><th>생년월일</th><td>${valueOrDash(draft.birthDate)}</td></tr>
-			<tr><th>연락처</th><td>${valueOrDash(draft.phone)}</td></tr>
-			<tr><th>이메일</th><td>${valueOrDash(draft.employeeEmail)}</td></tr>
-			<tr><th>주소</th><td>${valueOrDash(draft.address)}</td></tr>
-		</table>
+		<p class="parties">
+			이하 “사업주”라 함과 이하 “근로자”라 함은 다음과 같이 근로계약을 체결한다.
+		</p>
+		<ol>
+			<li>근로개시일 : ${valueOrDash(draft.startDate)}</li>
+			<li>근무장소 : ${valueOrDash(draft.storeName)} / ${valueOrDash(draft.storeAddress)}</li>
+			<li>업무의 내용 : ${valueOrDash(draft.workCondition)}</li>
+			<li>소정근로시간 : ${valueOrDash(workTime.start)}부터 ${valueOrDash(workTime.end)}까지</li>
+			<li>근무일 : 매주 ${escapeHtml(formatWorkDays(draft))}</li>
+			<li>
+				임금
+				<p class="sub">- 시간급여 : ${escapeHtml(formatWonText(draft.hourlyWage))}</p>
+				<p class="sub">- 임금지급일 : 매월 지정 지급일</p>
+				<p class="sub">- 지급방법 : 근로자 명의 예금통장에 입금</p>
+			</li>
+			<li>
+				근로계약서 교부
+				<p class="sub">- 사업주는 근로계약 체결과 동시에 본 계약서를 근로자에게 교부한다.</p>
+			</li>
+			<li>
+				기타
+				<p class="sub">- 이 계약에 정함이 없는 사항은 근로기준법령에 의한다.</p>
+				<p class="sub">- 필수 제출 서류 : ${escapeHtml(formatDocumentSummary(draft))}</p>
+				<p class="sub">- 특약 : ${valueOrDash(draft.contractMemo)}</p>
+			</li>
+		</ol>
+		<p class="center-date">${escapeHtml(contractDate)}</p>
+		<div class="sign-section">
+			<div class="sign-list">
+				<div class="party-block">
+					<div class="party-info">
+						<div class="party-title">(사업주)</div>
+						<div class="party-label">대표자 :</div>
+						<div class="party-value">${valueOrDash(hiringOwnerName)}</div>
+						<div class="party-label">주소 :</div>
+						<div class="party-value">${valueOrDash(draft.storeAddress)}</div>
+						<div class="party-label">연락처 :</div>
+						<div class="party-value">${valueOrDash(draft.storePhone)}</div>
+					</div>
+					<div class="party-signature">
+						<span class="sign-text">(서명)</span>
+						<span class="sign-slot">${signatureImage(signatures.ownerSignatureImageDataUrl)}</span>
+					</div>
+				</div>
+				<div class="party-block">
+					<div class="party-info">
+						<div class="party-title">(근로자)</div>
+						<div class="party-label">성명 :</div>
+						<div class="party-value">${valueOrDash(draft.employeeName)}</div>
+						<div class="party-label">주소 :</div>
+						<div class="party-value">${valueOrDash(draft.address)}</div>
+						<div class="party-label">연락처 :</div>
+						<div class="party-value">${valueOrDash(draft.phone)}</div>
+					</div>
+					<div class="party-signature">
+						<span class="sign-text">(서명)</span>
+						<span class="sign-slot">${signatureImage(signatures.employeeSignatureImageDataUrl)}</span>
+					</div>
+				</div>
+			</div>
+		</div>
 	`;
 }
 
-function workInfoTable(draft: HiringDraft) {
-	return `
-		<table>
-			<tr><th>입사 예정일</th><td>${valueOrDash(draft.startDate)}</td></tr>
-			<tr><th>근무요일</th><td>${escapeHtml(draft.workDays.join(", ") || "미입력")}</td></tr>
-			<tr><th>근무시간</th><td>${valueOrDash(draft.workTime)}</td></tr>
-			<tr><th>시급/급여</th><td>${escapeHtml(formatWonText(draft.hourlyWage))}</td></tr>
-			<tr><th>근무조건</th><td>${valueOrDash(draft.workCondition)}</td></tr>
-		</table>
-	`;
-}
-
-export function createHiringContractPages(draft: HiringDraft): HiringContractPage[] {
+export function createHiringContractPages(draft: HiringDraft, signatures: PartialHiringSignatureImages = {}): HiringContractPage[] {
 	return [
 		{
-			id: "basic",
-			title: "근로계약서 - 기본 정보",
-			html: pageShell(
-				"근로계약서",
-				`
-					<p>본 계약서는 ${valueOrDash(draft.storeName)}과 근로자 ${valueOrDash(draft.employeeName)} 사이의 근로 조건을 확인하기 위해 작성합니다.</p>
-					${baseInfoTable(draft)}
-				`,
-			),
-		},
-		{
-			id: "work",
-			title: "근로계약서 - 근무 조건",
-			html: pageShell(
-				"근무 조건",
-				`
-					<p>근로자는 아래 조건에 따라 매장 업무를 수행합니다.</p>
-					${workInfoTable(draft)}
-				`,
-			),
-		},
-		{
-			id: "notice",
-			title: "근로계약서 - 유의 사항",
-			html: pageShell(
-				"유의 사항",
-				`
-					<div class="notice">
-						<p>${valueOrDash(draft.notice)}</p>
-						<p>근로자는 매장 위생, 고객 응대, 현금 및 재고 관리 기준을 준수합니다.</p>
-						<p>계약 내용은 사장과 근로자가 함께 확인한 뒤 전자 서명으로 보관합니다.</p>
-					</div>
-				`,
-			),
+			id: "standard-contract",
+			title: "단시간근로자 표준근로계약서",
+			html: pageShell("단시간근로자 표준근로계약서", contractBody(draft, signatures)),
 		},
 	];
 }
 
-export function createHiringContractHtml(draft: HiringDraft, signatureImageDataUrl: string, signedAt: string) {
-	const pages = createHiringContractPages(draft)
-		.map((page, index) => {
-			const body = extractBodyHtml(page.html);
-
-			return `<section class="${index > 0 ? "page-break" : ""}">${body}</section>`;
-		})
-		.join("");
-
-	return `
-		<!doctype html>
-		<html>
-			<head>
-				<meta charset="utf-8" />
-				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				${contractStyles()}
-			</head>
-			<body>
-				${pages}
-				<section class="page-break">
-					<h1>전자 서명</h1>
-					<p>아래 서명은 ${escapeHtml(signedAt)}에 태블릿 화면에서 직접 작성되었습니다.</p>
-					<div class="sign-row">
-						<div class="sign-box">
-							<p><strong>사장</strong></p>
-							<p>${valueOrDash(draft.ownerName)}</p>
-						</div>
-						<div class="sign-box">
-							<p><strong>근로자</strong></p>
-							<p>${valueOrDash(draft.employeeName)}</p>
-							<img class="signature" src="${signatureImageDataUrl}" />
-						</div>
-					</div>
-				</section>
-			</body>
-		</html>
-	`;
+export function createHiringContractHtml(draft: HiringDraft, signatures: HiringSignatureImages) {
+	return pageShell("단시간근로자 표준근로계약서", contractBody(draft, signatures));
 }
 
 export function createHiringSummary(draft: HiringDraft) {
+	const workTime =
+		draft.workStartMinutes === null || draft.workEndMinutes === null
+			? "미입력"
+			: `${formatClockMinutes(draft.workStartMinutes)} - ${formatClockMinutes(draft.workEndMinutes)}`;
+
 	return [
-		{ label: "직원 이름", value: draft.employeeName || "미입력" },
-		{ label: "근무요일", value: draft.workDays.join(", ") || "미입력" },
-		{ label: "근무시간", value: draft.workTime || "미입력" },
-		{ label: "근무조건", value: draft.workCondition || "미입력" },
-		{ label: "시급/급여", value: formatWonText(draft.hourlyWage) },
-		{ label: "입사 예정일", value: draft.startDate || "미입력" },
-		{ label: "유의사항", value: draft.notice || "미입력" },
+		{ label: "1. 근로개시일", value: draft.startDate || "미입력" },
+		{ label: "2. 근무장소", value: `${draft.storeName || "미입력"} / ${draft.storeAddress || "미입력"}` },
+		{ label: "3. 업무의 내용", value: draft.workCondition || "미입력" },
+		{ label: "4. 소정근로시간", value: workTime },
+		{ label: "5. 근무일/휴일", value: `매주 ${formatWorkDays(draft)}` },
+		{ label: "6. 임금", value: formatWonText(draft.hourlyWage) },
+		{ label: "7. 계약서 교부", value: "근로계약 체결과 동시에 교부" },
+		{ label: "8. 기타", value: draft.contractMemo || "근로기준법령에 의함" },
 	];
 }

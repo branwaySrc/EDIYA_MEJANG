@@ -1,6 +1,8 @@
 export type RecipeVisual = {
-	description: string;
+	desc?: string;
+	description?: string;
 	id: string;
+	image?: string;
 	imageUri?: string;
 	title: string;
 };

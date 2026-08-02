@@ -1,7 +1,8 @@
-import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
-import { eventSubCategories, type Recipe, sampleRecipes } from "@/database/recipe/recipe";
+import { useMemo } from "react";
 
-const eventRecipes = sampleRecipes.filter(recipe => recipe.category === "이벤트");
+import { RecipeGroupList } from "@/components/features/home/recipe-group-list";
+import { eventSubCategories, type Recipe } from "@/database/recipe/recipe";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type EventContentProps = {
 	contentBottomInset?: number;
@@ -9,6 +10,9 @@ export type EventContentProps = {
 };
 
 export function EventContent({ contentBottomInset = 0, onPressRecipe }: EventContentProps) {
+	const recipes = useContentManagementStore(state => state.recipes);
+	const eventRecipes = useMemo(() => recipes.filter(recipe => recipe.category === "이벤트"), [recipes]);
+
 	return (
 		<RecipeGroupList
 			contentBottomInset={contentBottomInset}

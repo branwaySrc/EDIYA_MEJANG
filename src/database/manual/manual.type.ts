@@ -3,6 +3,15 @@ import type { ImageSourcePropType } from "react-native";
 import type { AppIconProps } from "@/components/base/app-icon";
 
 export type ManualCategorySlug = "open" | "middle" | "close" | "delivery" | "claim";
+export type ManagedContentShiftGroup = "마감" | "미들" | "오픈";
+
+export type ManagedContentSection = {
+	desc: string;
+	id: string;
+	imageAlt?: string;
+	imageSource?: ImageSourcePropType;
+	title: string;
+};
 
 export type ManualCategory = {
 	description: string;
@@ -26,8 +35,11 @@ export type ManualContentBlock =
 
 export type ManualEntry = {
 	blocks: ManualContentBlock[];
-	categorySlug: ManualCategorySlug;
+	categorySlug?: ManualCategorySlug;
+	description?: string;
 	id: string;
+	sections?: ManagedContentSection[];
+	shiftGroup?: ManagedContentShiftGroup;
 	title: string;
 };
 

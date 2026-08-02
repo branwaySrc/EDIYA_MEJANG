@@ -1,12 +1,12 @@
 import { type Href, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { AppIcon } from "@/components/base/app-icon";
+import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
-import { ManualItem } from "@/components/features/manual/manual-item";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { fetchManualCategories, getManualCategoriesSnapshot } from "@/database/manual/manual";
-import type { ManualCategory } from "@/database/manual/manual.type";
+import type { ManualCategory, ManualEntry } from "@/database/manual/manual.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export type ManualListProps = {
 	categories?: ManualCategory[];
@@ -14,26 +14,14 @@ export type ManualListProps = {
 
 export function ManualList({ categories }: ManualListProps) {
 	const router = useRouter();
-	const [manualCategories, setManualCategories] = useState(categories ?? getManualCategoriesSnapshot());
-	const currentCategories = categories ?? manualCategories;
+	const managedCategories = useContentManagementStore(state => state.manualCategories);
+	const managedEntries = useContentManagementStore(state => state.manualEntries);
+	const currentEntries = categories
+		? managedEntries.filter(entry => categories.some(category => category.slug === entry.categorySlug))
+		: managedEntries;
 
-	useEffect(() => {
-		if (categories) {
-			return;
-		}
-
-		let mounted = true;
-
-		void fetchManualCategories().then(nextCategories => {
-			if (mounted) {
-				setManualCategories(nextCategories);
-			}
-		});
-
-		return () => {
-			mounted = false;
-		};
-	}, [categories]);
+	const getSubtitle = (entry: ManualEntry) =>
+		entry.description?.trim() || entry.shiftGroup || managedCategories.find(category => category.slug === entry.categorySlug)?.title || "직원메뉴";
 
 	return (
 		<View style={styles.container}>
@@ -41,16 +29,30 @@ export function ManualList({ categories }: ManualListProps) {
 				<AppText.Xl bold color={AppColors.primary}>
 					직원 메뉴얼
 				</AppText.Xl>
-				<AppText.Sm color={AppColors.sub}>근무 구분별로 필요한 내용을 확인하세요.</AppText.Sm>
+				<AppText.Sm color={AppColors.sub}>등록된 게시글을 열어 세부 내용을 확인하세요.</AppText.Sm>
 			</View>
 
 			<View style={styles.list}>
-				{currentCategories.map(category => (
-					<ManualItem
-						key={category.slug}
-						category={category}
-						onPress={() => router.push(`/manual/${category.slug}` as Href)}
-					/>
+				{currentEntries.map(entry => (
+					<AppPressable
+						key={entry.id}
+						accessibilityLabel={`${entry.title} 메뉴얼 보기`}
+						accessibilityRole="button"
+						onPress={() => router.push(`/manual/${entry.id}` as Href)}
+						pressedColor="rgba(0, 75, 147, 0.04)"
+						radius="base"
+						style={styles.item}
+					>
+						<View style={styles.itemText}>
+							<AppText.Lg bold numberOfLines={2}>
+								{entry.title}
+							</AppText.Lg>
+							<AppText.Sm color={AppColors.sub} numberOfLines={1}>
+								{getSubtitle(entry)}
+							</AppText.Sm>
+						</View>
+						<AppIcon.Base color={AppColors.sub} name="chevron-forward" pressable={false} />
+					</AppPressable>
 				))}
 			</View>
 		</View>
@@ -70,5 +72,23 @@ const styles = StyleSheet.create({
 	},
 	list: {
 		gap: AppSpacing.sm,
+	},
+	item: {
+		width: "100%",
+		minHeight: 76,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: AppSpacing.md,
+		borderWidth: 1,
+		borderColor: "rgba(71, 85, 105, 0.24)",
+		backgroundColor: AppColors.background,
+		paddingHorizontal: AppSpacing.md,
+		paddingVertical: AppSpacing.sm,
+	},
+	itemText: {
+		flex: 1,
+		minWidth: 0,
+		gap: AppSpacing.xs,
 	},
 });

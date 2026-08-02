@@ -6,10 +6,9 @@ import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { useSajangAuthStore } from "@/store/sajang-auth-store";
+import { useSajangAuthStore, validateSajangPasscode } from "@/store/sajang-auth-store";
 
 const passcodeLength = 6;
-const ownerPasscode = process.env.EXPO_PUBLIC_SAJANG_PASSCODE;
 const keypadRows: (number | "enter" | "backspace")[][] = [
 	[1, 2, 3],
 	[4, 5, 6],
@@ -35,13 +34,15 @@ export function OwnerPasscodeView() {
 	};
 
 	const submitPasscode = () => {
-		if (!ownerPasscode) {
+		const validationResult = validateSajangPasscode(passcode);
+
+		if (validationResult === "missing") {
 			setPasscode("");
 			setErrorMessage("사장님 패스코드 설정이 필요합니다.");
 			return;
 		}
 
-		if (passcode !== ownerPasscode) {
+		if (validationResult === "invalid") {
 			setPasscode("");
 			setErrorMessage("비밀번호가 맞지 않아요.");
 			return;

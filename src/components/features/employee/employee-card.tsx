@@ -2,17 +2,19 @@ import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppBadge } from "@/components/base/app-badge";
+import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Employee } from "@/database/employee/employee.type";
 
 export type EmployeeCardProps = {
 	employee: Employee;
+	onPress?: () => void;
 };
 
-export const EmployeeCard = memo(function EmployeeCard({ employee }: EmployeeCardProps) {
-	return (
-		<View style={[styles.card, employee.owner && styles.ownerCard]}>
+export const EmployeeCard = memo(function EmployeeCard({ employee, onPress }: EmployeeCardProps) {
+	const content = (
+		<>
 			<View style={styles.header}>
 				<View style={styles.identity}>
 					<AppText.Xs bold color={AppColors.primary} numberOfLines={1}>
@@ -27,9 +29,9 @@ export const EmployeeCard = memo(function EmployeeCard({ employee }: EmployeeCar
 
 			<View style={styles.contact}>
 				<AppText.Xs bold color={AppColors.sub}>
-					카카오톡
+					연락처
 				</AppText.Xs>
-				<AppText.Sm numberOfLines={1}>{employee.kakaoName}</AppText.Sm>
+				<AppText.Sm numberOfLines={1}>{employee.phonePublic ? employee.phone : "카카오톡"}</AppText.Sm>
 			</View>
 
 			<View style={styles.schedule}>
@@ -55,8 +57,25 @@ export const EmployeeCard = memo(function EmployeeCard({ employee }: EmployeeCar
 					</View>
 				</View>
 			</View>
-		</View>
+		</>
 	);
+
+	if (onPress) {
+		return (
+			<AppPressable
+				accessibilityLabel={`${employee.name} 직원 상세 보기`}
+				accessibilityRole="button"
+				onPress={onPress}
+				pressedColor="rgba(0, 75, 147, 0.05)"
+				radius="idle"
+				style={[styles.card, employee.owner && styles.ownerCard]}
+			>
+				{content}
+			</AppPressable>
+		);
+	}
+
+	return <View style={[styles.card, employee.owner && styles.ownerCard]}>{content}</View>;
 });
 
 export default EmployeeCard;

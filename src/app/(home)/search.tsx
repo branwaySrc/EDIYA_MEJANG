@@ -7,11 +7,13 @@ import { SearchView } from "@/components/features/home/search/search-view";
 import { AppLayout } from "@/components/global/app-layout";
 import { AppSpacing } from "@/constants/theme";
 import type { Recipe } from "@/database/recipe/recipe.type";
+import { useContentManagementStore } from "@/store/content-management-store";
 
 export default function SearchScreen() {
 	const router = useRouter();
 	const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 	const [recipeDrawerOpen, setRecipeDrawerOpen] = useState(false);
+	const recipeDetails = useContentManagementStore(state => state.recipeDetails);
 
 	const openRecipeDrawer = useCallback((recipe: Recipe) => {
 		setSelectedRecipe(recipe);
@@ -41,7 +43,12 @@ export default function SearchScreen() {
 		>
 			<SearchView onPressRecipe={openRecipeDrawer} />
 		</AppLayout>
-			<RecipeDetailDrawer onClose={closeRecipeDrawer} open={recipeDrawerOpen} recipe={selectedRecipe} />
+			<RecipeDetailDrawer
+				detail={selectedRecipe ? recipeDetails[selectedRecipe.id] : undefined}
+				onClose={closeRecipeDrawer}
+				open={recipeDrawerOpen}
+				recipe={selectedRecipe}
+			/>
 		</>
 	);
 }

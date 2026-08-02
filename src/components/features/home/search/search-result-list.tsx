@@ -5,8 +5,9 @@ import { AppSpacer } from "@/components/base/app-spacer";
 import { AppText } from "@/components/base/app-text";
 import { Item } from "@/components/ui/item";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import { type Recipe, sampleRecipes } from "@/database/recipe/recipe";
+import type { Recipe } from "@/database/recipe/recipe";
 import { chosungSearchWithMatches } from "@/lib/chosung-search";
+import { useContentManagementStore } from "@/store/content-management-store";
 import { useSavedRecipesStore } from "@/store/saved-recipes-store";
 
 export type SearchResultListProps = {
@@ -15,7 +16,9 @@ export type SearchResultListProps = {
 	results?: Recipe[];
 };
 
-export function SearchResultList({ keyword = "", onPressRecipe, results = sampleRecipes }: SearchResultListProps) {
+export function SearchResultList({ keyword = "", onPressRecipe, results }: SearchResultListProps) {
+	const managedRecipes = useContentManagementStore(state => state.recipes);
+	const currentResults = results ?? managedRecipes;
 	const savedRecipeIds = useSavedRecipesStore(state => state.savedRecipeIds);
 	const toggleRecipe = useSavedRecipesStore(state => state.toggleRecipe);
 	const hasKeyword = keyword.trim().length > 0;
@@ -29,10 +32,10 @@ export function SearchResultList({ keyword = "", onPressRecipe, results = sample
 							limit: 4,
 							query: keyword,
 						},
-						results,
+						currentResults,
 					)
 				: [],
-		[hasKeyword, keyword, results],
+		[currentResults, hasKeyword, keyword],
 	);
 
 	return (
