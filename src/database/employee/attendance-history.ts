@@ -4,6 +4,7 @@ import type {
 	AttendanceMonthCoverageRow,
 	AttendanceRecord,
 } from "@/database/employee/attendance.type";
+import { defaultAttendanceStoreId } from "@/database/employee/attendance";
 import { sampleEmployees } from "@/database/employee/employee";
 import {
 	buildCalendarMonthDays,
@@ -12,11 +13,13 @@ import {
 	parseDateKey,
 	parseWorkTime,
 } from "@/lib/korea-date";
+import { fetchSupabaseAttendanceMonthArchiveAsync } from "@/lib/employee/supabase-attendance-repository";
 
 export const attendanceMonthCoverageTable = {
 	closedAt: "closed_at",
 	monthKey: "month_key",
 	status: "status",
+	storeId: "store_id",
 } as const;
 
 export const sampleAttendanceMonthCoverages: AttendanceMonthCoverage[] = [
@@ -99,9 +102,11 @@ export function toAttendanceMonthCoverage(row: AttendanceMonthCoverageRow): Atte
 
 export function toAttendanceMonthCoverageRow(
 	coverage: AttendanceMonthCoverage,
+	storeId = defaultAttendanceStoreId,
 ): AttendanceMonthCoverageRow {
 	return {
 		month_key: coverage.monthKey,
+		store_id: storeId,
 		status: coverage.status,
 		closed_at: coverage.closedAt ?? null,
 	};
@@ -123,5 +128,15 @@ export function getAttendanceMonthArchiveSnapshot(monthKey: string): AttendanceM
 }
 
 export async function fetchAttendanceMonthArchive(monthKey: string): Promise<AttendanceMonthArchive | null> {
+	try {
+		const remoteArchive = await fetchSupabaseAttendanceMonthArchiveAsync(monthKey);
+
+		if (remoteArchive) {
+			return remoteArchive;
+		}
+	} catch (error) {
+		console.error("Failed to fetch attendance month archive from Supabase.", error);
+	}
+
 	return getAttendanceMonthArchiveSnapshot(monthKey);
 }

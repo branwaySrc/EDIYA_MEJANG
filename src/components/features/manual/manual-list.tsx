@@ -1,4 +1,5 @@
 import { type Href, useRouter } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
@@ -14,6 +15,9 @@ export type ManualListProps = {
 
 export function ManualList({ categories }: ManualListProps) {
 	const router = useRouter();
+	const contentSyncErrorMessage = useContentManagementStore(state => state.contentSyncErrorMessage);
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const managedCategories = useContentManagementStore(state => state.manualCategories);
 	const managedEntries = useContentManagementStore(state => state.manualEntries);
 	const currentEntries = categories
@@ -22,6 +26,10 @@ export function ManualList({ categories }: ManualListProps) {
 
 	const getSubtitle = (entry: ManualEntry) =>
 		entry.description?.trim() || entry.shiftGroup || managedCategories.find(category => category.slug === entry.categorySlug)?.title || "직원메뉴";
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
 
 	return (
 		<View style={styles.container}>
@@ -33,6 +41,14 @@ export function ManualList({ categories }: ManualListProps) {
 			</View>
 
 			<View style={styles.list}>
+				{contentSyncing ? (
+					<View style={styles.loadingBox}>
+						<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+					</View>
+				) : null}
+				{contentSyncErrorMessage ? (
+					<AppText.Sm color="#B91C1C">{contentSyncErrorMessage}</AppText.Sm>
+				) : null}
 				{currentEntries.map(entry => (
 					<AppPressable
 						key={entry.id}
@@ -90,5 +106,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 		minWidth: 0,
 		gap: AppSpacing.xs,
+	},
+	loadingBox: {
+		minHeight: 64,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#F4F9FF",
 	},
 });

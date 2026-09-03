@@ -6,9 +6,11 @@ import { AppPressable } from "@/components/base/app-pressable";
 import { AppSpacer } from "@/components/base/app-spacer";
 import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import type { LocalContentPackMetadata } from "@/database/content-pack/content-pack";
-import { syncRecipeSearchCacheFromSupabaseAsync } from "@/lib/content-pack/content-cache-sync";
-import { getLocalContentPackMetadataAsync, readLocalContentPackSnapshotAsync } from "@/lib/content-pack/local-content-pack";
+import {
+	getRecipeSearchCacheMetadataAsync,
+	type RecipeSearchCacheMetadata,
+} from "@/lib/content-cache/recipe-search-cache";
+import { syncRecipeSearchCacheFromSupabaseAsync } from "@/lib/content-cache/sync-recipe-search-cache";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useContentManagementStore } from "@/store/content-management-store";
 
@@ -25,22 +27,25 @@ export function SettingView() {
 	const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
 	const updateInProgress = updateStatus === "updating";
 
-	const applyMetadata = useCallback((metadata: LocalContentPackMetadata) => {
-		setRecipeVersion(metadata.packVersion ?? "내장 데이터");
+	const applyMetadata = useCallback((metadata: RecipeSearchCacheMetadata) => {
+		setRecipeVersion(metadata.cacheVersion);
 		setRecipeUpdatedAt(formatUpdatedAt(metadata.appliedAt));
 	}, []);
 
 	useEffect(() => {
 		let mounted = true;
 
-		getLocalContentPackMetadataAsync()
+		getRecipeSearchCacheMetadataAsync()
 			.then(metadata => {
-				if (mounted) {
+				if (mounted && metadata) {
 					applyMetadata(metadata);
+				} else if (mounted) {
+					setRecipeVersion("업데이트 필요");
+					setRecipeUpdatedAt("업데이트 이력 없음");
 				}
 			})
 			.catch(error => {
-				console.error("Failed to load local recipe pack metadata.", error);
+				console.error("Failed to load recipe/search cache metadata.", error);
 
 				if (mounted) {
 					setRecipeVersion("확인 실패");
@@ -62,15 +67,14 @@ export function SettingView() {
 
 		try {
 			const result = await syncRecipeSearchCacheFromSupabaseAsync();
-			const snapshot = await readLocalContentPackSnapshotAsync();
 
 			applyMetadata(result.metadata);
 			replaceRecipeSearchContent({
-				findEntries: snapshot.findEntries,
-				recipeDetails: snapshot.recipeDetails,
-				recipes: snapshot.recipes,
+				findEntries: result.findEntries,
+				recipeDetails: result.recipeDetails,
+				recipes: result.recipes,
 			});
-			showToast(`레시피 최신화 완료 (${result.recipeCount}개)`);
+			showToast(`레시피 최신화 완료 (${result.metadata.recipeCount}개)`);
 		} catch (error) {
 			console.error("Failed to sync recipe search cache.", error);
 			showToast("레시피 최신화에 실패했습니다");

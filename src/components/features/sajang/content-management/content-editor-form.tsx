@@ -18,6 +18,7 @@ import type {
 	ManagedContentSection,
 	ManagedContentShiftGroup,
 } from "@/database/manual/manual.type";
+import type { ManagedContentType } from "@/database/managed-content/managed-content.type";
 import type { Notice } from "@/database/notices/notice.type";
 import type {
 	TutorialContentBlock,
@@ -27,12 +28,13 @@ import { getKoreaTodayKey } from "@/lib/korea-date";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useContentManagementStore } from "@/store/content-management-store";
 
-export type ManagedContentType = "manual" | "notice" | "tutorial";
+export type { ManagedContentType } from "@/database/managed-content/managed-content.type";
 
 type DocumentBlockDraft = {
 	desc: string;
 	id: string;
 	imageUri: string;
+	storagePath?: string;
 	title: string;
 };
 
@@ -65,6 +67,7 @@ function sectionToDraft(section: ManagedContentSection): DocumentBlockDraft {
 		desc: section.desc,
 		id: section.id,
 		imageUri: section.imageSource ? getImageUri(section.imageSource) : "",
+		storagePath: section.storagePath,
 		title: section.title,
 	};
 }
@@ -88,6 +91,7 @@ function legacyBlocksToDrafts(
 			desc,
 			id: `content-block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
 			imageUri: imageBlock && imageBlock.type === "image" ? getImageUri(imageBlock.source) : "",
+			storagePath: imageBlock && imageBlock.type === "image" ? imageBlock.storagePath : undefined,
 			title: fallbackTitle,
 		},
 	];
@@ -112,6 +116,7 @@ function draftToSection(block: DocumentBlockDraft): ManagedContentSection {
 		id: block.id,
 		imageAlt: block.title.trim() || "내용 이미지",
 		imageSource: block.imageUri ? { uri: block.imageUri } : undefined,
+		storagePath: block.storagePath,
 		title: block.title.trim(),
 	};
 }
@@ -133,6 +138,7 @@ function draftToContentBlocks(blocks: DocumentBlockDraft[]): ManualContentBlock[
 				alt: block.title.trim() || "내용 이미지",
 				id: `${block.id}-image`,
 				source: { uri: block.imageUri },
+				storagePath: block.storagePath,
 				type: "image",
 			});
 		}
@@ -210,7 +216,7 @@ function DocumentSectionEditor({
 					<ManagementImagePicker
 						accessibilityLabel={`내용 이미지 ${index + 1} 선택`}
 						imageUri={block.imageUri}
-						onChange={imageUri => updateBlock(index, { ...block, imageUri })}
+						onChange={imageUri => updateBlock(index, { ...block, imageUri, storagePath: undefined })}
 					/>
 				</View>
 			))}
@@ -260,8 +266,13 @@ export function ContentEditorForm({
 		},
 	);
 	const [errorMessage, setErrorMessage] = useState("");
+	const [submitting, setSubmitting] = useState(false);
 
-	const saveContent = () => {
+	const saveContent = async () => {
+		if (submitting) {
+			return;
+		}
+
 		const trimmedTitle = title.trim();
 		const contentSections = blocks
 			.map(draftToSection)
@@ -282,52 +293,61 @@ export function ContentEditorForm({
 			return;
 		}
 
-		if (contentType === "notice") {
-			const body = contentSections.map(section => section.desc).filter(Boolean);
-			const notice: Notice = {
-				body,
-				description: description.trim(),
-				id: existingNotice?.id ?? `notice-${Date.now()}`,
-				keywords: [trimmedTitle, description, ...contentSections.flatMap(section => [section.title, section.desc])]
-					.join(" ")
-					.split(/\s+/)
-					.map(keyword => keyword.trim())
-					.filter(Boolean)
-					.slice(0, 8),
-				sections: contentSections,
-				shiftGroup,
-				title: trimmedTitle,
-				uploadedAt: existingNotice?.uploadedAt ?? getKoreaTodayKey(),
-			};
+		setSubmitting(true);
 
-			upsertNotice(notice);
-		} else if (contentType === "manual") {
-			const entry: ManualEntry = {
-				blocks: draftToContentBlocks(blocks),
-				categorySlug: shiftGroupSlugMap[shiftGroup],
-				description: description.trim(),
-				id: existingManual?.id ?? `manual-${Date.now()}`,
-				sections: contentSections,
-				shiftGroup,
-				title: trimmedTitle,
-			};
+		try {
+			if (contentType === "notice") {
+				const body = contentSections.map(section => section.desc).filter(Boolean);
+				const notice: Notice = {
+					body,
+					description: description.trim(),
+					id: existingNotice?.id ?? `notice-${Date.now()}`,
+					keywords: [trimmedTitle, description, ...contentSections.flatMap(section => [section.title, section.desc])]
+						.join(" ")
+						.split(/\s+/)
+						.map(keyword => keyword.trim())
+						.filter(Boolean)
+						.slice(0, 8),
+					sections: contentSections,
+					shiftGroup,
+					title: trimmedTitle,
+					uploadedAt: existingNotice?.uploadedAt ?? getKoreaTodayKey(),
+				};
 
-			upsertManualEntry(entry);
-		} else {
-			const entry: TutorialEntry = {
-				blocks: draftToContentBlocks(blocks),
-				description: description.trim(),
-				id: existingTutorial?.id ?? `tutorial-${Date.now()}`,
-				sections: contentSections,
-				shiftGroup,
-				title: trimmedTitle,
-				topicSlug: existingTutorial?.topicSlug ?? "store-dispatch",
-			};
+				await upsertNotice(notice);
+			} else if (contentType === "manual") {
+				const entry: ManualEntry = {
+					blocks: draftToContentBlocks(blocks),
+					categorySlug: shiftGroupSlugMap[shiftGroup],
+					description: description.trim(),
+					id: existingManual?.id ?? `manual-${Date.now()}`,
+					sections: contentSections,
+					shiftGroup,
+					title: trimmedTitle,
+				};
 
-			upsertTutorialEntry(entry);
+				await upsertManualEntry(entry);
+			} else {
+				const entry: TutorialEntry = {
+					blocks: draftToContentBlocks(blocks),
+					description: description.trim(),
+					id: existingTutorial?.id ?? `tutorial-${Date.now()}`,
+					sections: contentSections,
+					shiftGroup,
+					title: trimmedTitle,
+					topicSlug: existingTutorial?.topicSlug ?? "store-dispatch",
+				};
+
+				await upsertTutorialEntry(entry);
+			}
+		} catch {
+			setErrorMessage("Supabase 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+			setSubmitting(false);
+			return;
 		}
 
 		setErrorMessage("");
+		setSubmitting(false);
 		showToast("저장이 완료되었습니다.");
 
 		if (router.canGoBack()) {
@@ -387,14 +407,15 @@ export function ContentEditorForm({
 			<View style={styles.saveArea}>
 				<AppPressable
 					accessibilityLabel="콘텐츠 저장"
-					onPress={saveContent}
+					disabled={submitting}
+					onPress={() => void saveContent()}
 					pressedColor="#003E7A"
 					radius="base"
-					style={styles.saveButton}
+					style={[styles.saveButton, submitting ? styles.saveButtonDisabled : null]}
 				>
 					<AppIcon.Sm color={AppColors.textOnPrimary} name="save-outline" pressable={false} />
 					<AppText.Base bold color={AppColors.textOnPrimary}>
-						저장
+						{submitting ? "저장 중" : "저장"}
 					</AppText.Base>
 				</AppPressable>
 			</View>
@@ -472,5 +493,8 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: AppSpacing.sm,
 		backgroundColor: AppColors.primary,
+	},
+	saveButtonDisabled: {
+		opacity: 0.45,
 	},
 });

@@ -31,12 +31,12 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "메뉴와 매장 운영 이미지를 등록하기 위해 사진 접근 권한이 필요합니다.",
+          "cameraPermission": "영수증과 주문표를 촬영하기 위해 카메라 권한이 필요합니다.",
+          "photosPermission": "메뉴, 매장 운영 이미지, 영수증과 주문표를 등록하기 위해 사진 접근 권한이 필요합니다.",
           "microphonePermission": false
         }
       ],
-      "expo-mail-composer",
-      "expo-sqlite"
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true,

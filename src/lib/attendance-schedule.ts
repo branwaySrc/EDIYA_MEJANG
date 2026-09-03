@@ -5,9 +5,11 @@ import type {
 	EmployeeAttendanceSummary,
 } from "@/database/employee/attendance.type";
 import type { Employee } from "@/database/employee/employee.type";
+import { employeeShiftGroups } from "@/database/employee/employee";
 import {
 	buildCalendarMonthDays,
 	formatDateKey,
+	getKoreaDateKey,
 	getTimeDurationMinutes,
 	getWeekday,
 	parseWorkTime,
@@ -35,6 +37,24 @@ function createScheduleKey(employeeId: string, workDate: string) {
 	return `${employeeId}:${workDate}`;
 }
 
+function isWithinEmploymentDates(employee: Employee, dateKey: string) {
+	if (employee.employmentPeriods && employee.employmentPeriods.length > 0) {
+		const currentTerminationDateKey = employee.terminatedAt ? getKoreaDateKey(employee.terminatedAt) : null;
+
+		return employee.employmentPeriods.some(
+			period => {
+				const effectiveEndDate = period.endedOn ?? currentTerminationDateKey;
+
+				return period.startedOn <= dateKey && (!effectiveEndDate || dateKey <= effectiveEndDate);
+			},
+		);
+	}
+
+	const terminatedDateKey = employee.terminatedAt ? getKoreaDateKey(employee.terminatedAt) : null;
+
+	return employee.joinedAt <= dateKey && (!terminatedDateKey || dateKey <= terminatedDateKey);
+}
+
 function createScheduleEntry(
 	employee: Employee,
 	workDate: string,
@@ -56,7 +76,8 @@ function createScheduleEntry(
 		id: record?.id ?? `schedule-${workDate}-${employee.id}`,
 		employeeId: employee.id,
 		employeeName: employee.name,
-		shiftGroup: employee.shiftGroup,
+		isVacantSlot: false,
+		shiftGroup: record?.shiftGroup ?? employee.shiftGroup,
 		workDate,
 		scheduledStart,
 		scheduledEnd,
@@ -69,8 +90,35 @@ function createScheduleEntry(
 		substituteEmployeeName: substituteEmployee?.name,
 		substituteCheckedInAt: record?.substituteCheckedInAt,
 		substituteConfirmedWorkMinutes: record?.substituteConfirmedWorkMinutes,
+		substituteHourlyWageSnapshot: record?.substituteHourlyWageSnapshot,
+		temporaryWorkerId: record?.temporaryWorkerId,
+		temporaryWorkerName: record?.temporaryWorkerName,
+		temporaryWorkerPhone: record?.temporaryWorkerPhone,
 		updatedByEmployeeId: record?.updatedByEmployeeId ?? employee.id,
 		updatedAt: record?.updatedAt ?? `${workDate}T00:00:00.000Z`,
+	};
+}
+
+function createVacantScheduleEntry(
+	record: AttendanceRecord,
+	substituteEmployee?: Employee,
+): AttendanceScheduleEntry | null {
+	if (!record.shiftGroup) {
+		return null;
+	}
+
+	const scheduledMinutes = record.scheduledStart && record.scheduledEnd
+		? getTimeDurationMinutes(record.scheduledStart, record.scheduledEnd)
+		: 0;
+
+	return {
+		...record,
+		employeeId: "",
+		employeeName: "비어있음",
+		isVacantSlot: true,
+		scheduledMinutes,
+		shiftGroup: record.shiftGroup,
+		substituteEmployeeName: substituteEmployee?.name,
 	};
 }
 
@@ -101,7 +149,11 @@ export function buildAttendanceScheduleForDates({
 }: BuildAttendanceScheduleForDatesOptions): AttendanceScheduleEntry[] {
 	const staff = employees.filter(employee => !employee.owner);
 	const employeeById = new Map(staff.map(employee => [employee.id, employee]));
-	const recordBySchedule = new Map(records.map(record => [createScheduleKey(record.employeeId, record.workDate), record]));
+	const recordBySchedule = new Map(
+		records
+			.filter(record => !record.isVacantSlot && Boolean(record.employeeId))
+			.map(record => [createScheduleKey(record.employeeId, record.workDate), record]),
+	);
 	const requestedDateKeys = new Set(dateKeys);
 	const scheduleByKey = new Map<string, AttendanceScheduleEntry>();
 
@@ -109,7 +161,7 @@ export function buildAttendanceScheduleForDates({
 		const weekday = getWeekday(dateKey);
 
 		for (const employee of staff) {
-			if (employee.joinedAt > dateKey || !employee.workDays.includes(weekday)) {
+			if (!isWithinEmploymentDates(employee, dateKey) || !employee.workDays.includes(weekday)) {
 				continue;
 			}
 
@@ -131,6 +183,19 @@ export function buildAttendanceScheduleForDates({
 			continue;
 		}
 
+		if (record.isVacantSlot) {
+			const substituteEmployee = record.substituteEmployeeId
+				? employeeById.get(record.substituteEmployeeId)
+				: undefined;
+			const vacantEntry = createVacantScheduleEntry(record, substituteEmployee);
+
+			if (vacantEntry) {
+				scheduleByKey.set(`vacant:${record.workDate}:${vacantEntry.shiftGroup}`, vacantEntry);
+			}
+
+			continue;
+		}
+
 		const key = createScheduleKey(record.employeeId, record.workDate);
 
 		if (scheduleByKey.has(key)) {
@@ -138,6 +203,11 @@ export function buildAttendanceScheduleForDates({
 		}
 
 		const employee = employeeById.get(record.employeeId);
+
+		if (employee && !isWithinEmploymentDates(employee, record.workDate)) {
+			continue;
+		}
+
 		const substituteEmployee = record.substituteEmployeeId
 			? employeeById.get(record.substituteEmployeeId)
 			: undefined;
@@ -153,6 +223,7 @@ export function buildAttendanceScheduleForDates({
 	return [...scheduleByKey.values()].sort(
 		(left, right) =>
 			left.workDate.localeCompare(right.workDate) ||
+			employeeShiftGroups.indexOf(left.shiftGroup) - employeeShiftGroups.indexOf(right.shiftGroup) ||
 			left.scheduledStart.localeCompare(right.scheduledStart) ||
 			left.employeeName.localeCompare(right.employeeName, "ko"),
 	);
@@ -222,29 +293,34 @@ export function buildAttendanceMonthSummary(
 		.filter(employee => !employee.owner)
 		.map(employee => buildEmployeeSummary(employee, entries, todayKey))
 		.filter(summary => summary.scheduledShiftCount > 0);
-	const elapsedEntries = entries.filter(entry => entry.workDate <= todayKey);
-	const completedEntries = elapsedEntries.filter(entry => entry.status === "completed");
+	const regularEntries = entries.filter(entry => !entry.isVacantSlot);
+	const elapsedEntries = regularEntries.filter(entry => entry.workDate <= todayKey);
+	const completedRegularEntries = elapsedEntries.filter(entry => entry.status === "completed");
+	const completedVacantEntries = entries.filter(
+		entry => entry.isVacantSlot && entry.status === "completed" && Boolean(entry.substituteEmployeeId || entry.temporaryWorkerId),
+	);
+	const completedEntries = [...completedRegularEntries, ...completedVacantEntries];
 	const missedEntries = elapsedEntries.filter(entry => entry.status === "missed");
 	const substituteEntries = entries.filter(
-		entry => entry.status === "completed" && Boolean(entry.substituteEmployeeId),
+		entry => entry.status === "completed" && Boolean(entry.substituteEmployeeId || entry.temporaryWorkerId),
 	);
 
 	return {
-		scheduledShiftCount: entries.length,
+		scheduledShiftCount: regularEntries.length,
 		elapsedShiftCount: elapsedEntries.length,
 		completedShiftCount: completedEntries.length,
 		missedShiftCount: missedEntries.length,
-		contractedMinutes: entries.reduce((total, entry) => total + entry.scheduledMinutes, 0),
+		contractedMinutes: regularEntries.reduce((total, entry) => total + entry.scheduledMinutes, 0),
 		completedMinutes: completedEntries.reduce(
 			(total, entry) =>
 				total +
-				(entry.substituteEmployeeId
+				(entry.substituteEmployeeId || entry.temporaryWorkerId
 					? entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes
 					: entry.confirmedWorkMinutes ?? entry.scheduledMinutes),
 			0,
 		),
 		missedMinutes: missedEntries.reduce((total, entry) => total + entry.scheduledMinutes, 0),
-		attendanceRate: elapsedEntries.length === 0 ? 0 : completedEntries.length / elapsedEntries.length,
+		attendanceRate: elapsedEntries.length === 0 ? 0 : completedRegularEntries.length / elapsedEntries.length,
 		substituteShiftCount: substituteEntries.length,
 		substituteMinutes: substituteEntries.reduce(
 			(total, entry) => total + (entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes),
@@ -283,5 +359,5 @@ export function getMonthDateKey({ month, year }: CalendarMonth, day: number) {
 }
 
 export function isEmployeeScheduledOnDate(employee: Employee, dateKey: string) {
-	return employee.joinedAt <= dateKey && employee.workDays.includes(getWeekday(dateKey));
+	return isWithinEmploymentDates(employee, dateKey) && employee.workDays.includes(getWeekday(dateKey));
 }

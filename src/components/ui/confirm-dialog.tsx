@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 
 import { AppPressable } from "@/components/base/app-pressable";
@@ -5,6 +6,8 @@ import { AppText } from "@/components/base/app-text";
 import { AppColors, AppSpacing } from "@/constants/theme";
 
 type ConfirmDialogProps = {
+	children?: ReactNode;
+	confirmDisabled?: boolean;
 	confirmLabel?: string;
 	message: string;
 	onCancel: () => void;
@@ -14,6 +17,8 @@ type ConfirmDialogProps = {
 };
 
 export function ConfirmDialog({
+	children,
+	confirmDisabled = false,
 	confirmLabel = "삭제",
 	message,
 	onCancel,
@@ -31,15 +36,16 @@ export function ConfirmDialog({
 			visible={open}
 		>
 			<View style={styles.layer}>
-				<Pressable accessibilityLabel="삭제 확인창 닫기" onPress={onCancel} style={styles.backdrop} />
+				<Pressable accessibilityLabel={`${title} 확인창 닫기`} onPress={onCancel} style={styles.backdrop} />
 				<View accessibilityViewIsModal style={styles.dialog}>
 					<View style={styles.content}>
 						<AppText.Lg bold>{title}</AppText.Lg>
 						<AppText.Base color={AppColors.sub}>{message}</AppText.Base>
+						{children}
 					</View>
 					<View style={styles.actions}>
 						<AppPressable
-							accessibilityLabel="삭제 취소"
+							accessibilityLabel={`${title} 취소`}
 							accessibilityRole="button"
 							onPress={onCancel}
 							radius="base"
@@ -48,12 +54,14 @@ export function ConfirmDialog({
 							<AppText.Base bold>취소</AppText.Base>
 						</AppPressable>
 						<AppPressable
-							accessibilityLabel="아이템 삭제"
+							accessibilityLabel={`${title} 확인`}
 							accessibilityRole="button"
+							accessibilityState={{ disabled: confirmDisabled }}
+							disabled={confirmDisabled}
 							onPress={onConfirm}
 							pressedColor="#991B1B"
 							radius="base"
-							style={styles.deleteButton}
+							style={[styles.deleteButton, confirmDisabled ? styles.disabledButton : null]}
 						>
 							<AppText.Base bold color={AppColors.textOnPrimary}>
 								{confirmLabel}
@@ -113,5 +121,8 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#B91C1C",
+	},
+	disabledButton: {
+		opacity: 0.45,
 	},
 });

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/base/app-text";
@@ -56,11 +57,17 @@ function renderSection(section: ManagedContentSection) {
 }
 
 export function TutorialContentView({ topicSlug }: TutorialContentViewProps) {
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const topics = useContentManagementStore(state => state.tutorialTopics);
 	const allEntries = useContentManagementStore(state => state.tutorialEntries);
 	const directEntry = allEntries.find(entry => entry.id === topicSlug);
 	const topic = topics.find(item => item.slug === topicSlug);
 	const entries = allEntries.filter(entry => entry.topicSlug === topicSlug);
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
 
 	if (directEntry) {
 		return (
@@ -96,6 +103,9 @@ export function TutorialContentView({ topicSlug }: TutorialContentViewProps) {
 	if (!topic) {
 		return (
 			<View style={styles.container}>
+				{contentSyncing ? (
+					<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+				) : null}
 				<AppText.Xl bold color={AppColors.primary}>
 					튜토리얼을 찾을 수 없습니다
 				</AppText.Xl>

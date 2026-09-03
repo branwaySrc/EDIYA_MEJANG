@@ -1,12 +1,22 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRef } from "react";
 
-import { FindEditorForm } from "@/components/features/sajang/menu-management/find-editor-form";
-import { RecipeEditorForm } from "@/components/features/sajang/menu-management/recipe-editor-form";
+import {
+	FindEditorForm,
+	type FindEditorFormRef,
+} from "@/components/features/sajang/menu-management/find-editor-form";
+import {
+	RecipeEditorForm,
+	type RecipeEditorFormRef,
+} from "@/components/features/sajang/menu-management/recipe-editor-form";
+import { ManagementHeaderSaveButton } from "@/components/features/sajang/management/management-ui";
 import { AppLayout } from "@/components/global/app-layout";
 import type { FindEntryKind } from "@/database/find/find.type";
 
 export default function SajangMenuEditorScreen() {
 	const router = useRouter();
+	const recipeEditorRef = useRef<RecipeEditorFormRef>(null);
+	const findEditorRef = useRef<FindEditorFormRef>(null);
 	const params = useLocalSearchParams<{
 		id?: string;
 		kind?: FindEntryKind;
@@ -18,6 +28,18 @@ export default function SajangMenuEditorScreen() {
 	return (
 		<AppLayout
 			activeDrawerId="owner-space"
+			aside={
+				<ManagementHeaderSaveButton
+					onPress={() => {
+						if (editorType === "recipe") {
+							void recipeEditorRef.current?.save();
+							return;
+						}
+
+						void findEditorRef.current?.save();
+					}}
+				/>
+			}
 			leadingMode="back"
 			onPressBack={() => router.back()}
 			scrollViewProps={{ keyboardShouldPersistTaps: "handled" }}
@@ -25,9 +47,9 @@ export default function SajangMenuEditorScreen() {
 			type="scrollview"
 		>
 			{editorType === "recipe" ? (
-				<RecipeEditorForm recipeId={params.id} />
+				<RecipeEditorForm ref={recipeEditorRef} recipeId={params.id} />
 			) : (
-				<FindEditorForm entryId={params.id} initialKind={params.kind} />
+				<FindEditorForm ref={findEditorRef} entryId={params.id} initialKind={params.kind} />
 			)}
 		</AppLayout>
 	);

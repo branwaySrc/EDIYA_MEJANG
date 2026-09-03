@@ -3,7 +3,11 @@ import type {
 	AttendanceLogRow,
 	AttendanceRecord,
 	AttendanceRecordRow,
+	AttendanceTemporaryWorker,
+	AttendanceTemporaryWorkerRow,
 } from "@/database/employee/attendance.type";
+
+export const defaultAttendanceStoreId = "wolpi";
 
 export const attendanceRecordTable = {
 	checkedInAt: "checked_in_at",
@@ -11,14 +15,20 @@ export const attendanceRecordTable = {
 	confirmedWorkMinutes: "confirmed_work_minutes",
 	employeeId: "employee_id",
 	id: "id",
+	isVacantSlot: "is_vacant_slot",
 	scheduledEnd: "scheduled_end",
 	scheduledStart: "scheduled_start",
+	shiftGroup: "shift_group",
 	status: "status",
+	storeId: "store_id",
 	substituteCheckedInAt: "substitute_checked_in_at",
 	substituteConfirmedWorkMinutes: "substitute_confirmed_work_minutes",
 	substituteEmployeeId: "substitute_employee_id",
+	substituteHourlyWageSnapshot: "substitute_hourly_wage_snapshot",
+	temporaryWorkerId: "temporary_worker_id",
 	updatedAt: "updated_at",
 	updatedByEmployeeId: "updated_by_employee_id",
+	updatedByTemporaryWorkerId: "updated_by_temporary_worker_id",
 	workDate: "work_date",
 } as const;
 
@@ -29,6 +39,7 @@ export const attendanceLogTable = {
 	employeeId: "employee_id",
 	id: "id",
 	message: "message",
+	storeId: "store_id",
 	updatedByEmployeeId: "updated_by_employee_id",
 } as const;
 
@@ -272,13 +283,15 @@ export const sampleAttendanceLogs: AttendanceLogRecord[] = [
 	},
 ];
 
-export function toAttendanceRecord(row: AttendanceRecordRow): AttendanceRecord {
+export function toAttendanceRecord(row: AttendanceRecordRow, temporaryWorker?: AttendanceTemporaryWorker): AttendanceRecord {
 	return {
 		id: row.id,
-		employeeId: row.employee_id,
+		employeeId: row.employee_id ?? "",
+		isVacantSlot: row.is_vacant_slot ?? false,
 		workDate: row.work_date,
-		scheduledStart: row.scheduled_start,
-		scheduledEnd: row.scheduled_end,
+		scheduledStart: row.scheduled_start ?? "",
+		scheduledEnd: row.scheduled_end ?? "",
+		shiftGroup: row.shift_group,
 		status: row.status,
 		checkedInAt: row.checked_in_at ?? undefined,
 		checkedOutAt: row.checked_out_at ?? undefined,
@@ -286,18 +299,30 @@ export function toAttendanceRecord(row: AttendanceRecordRow): AttendanceRecord {
 		substituteEmployeeId: row.substitute_employee_id ?? undefined,
 		substituteCheckedInAt: row.substitute_checked_in_at ?? undefined,
 		substituteConfirmedWorkMinutes: row.substitute_confirmed_work_minutes ?? undefined,
-		updatedByEmployeeId: row.updated_by_employee_id,
+		substituteHourlyWageSnapshot: row.substitute_hourly_wage_snapshot ?? undefined,
+		temporaryWorkerId: row.temporary_worker_id ?? undefined,
+		temporaryWorkerName: temporaryWorker?.name,
+		temporaryWorkerPhone: temporaryWorker?.phone,
+		updatedByEmployeeId: row.updated_by_employee_id ?? "",
+		updatedByTemporaryWorkerId: row.updated_by_temporary_worker_id ?? undefined,
 		updatedAt: row.updated_at,
 	};
 }
 
-export function toAttendanceRecordRow(record: AttendanceRecord): AttendanceRecordRow {
+export function toAttendanceRecordRow(record: AttendanceRecord, storeId = defaultAttendanceStoreId): AttendanceRecordRow {
+	if (!record.shiftGroup) {
+		throw new Error("Attendance record shift group is required for Supabase sync.");
+	}
+
 	return {
 		id: record.id,
-		employee_id: record.employeeId,
+		store_id: storeId,
+		employee_id: record.isVacantSlot ? null : record.employeeId,
+		is_vacant_slot: record.isVacantSlot ?? false,
 		work_date: record.workDate,
-		scheduled_start: record.scheduledStart,
-		scheduled_end: record.scheduledEnd,
+		scheduled_start: record.scheduledStart || null,
+		scheduled_end: record.scheduledEnd || null,
+		shift_group: record.shiftGroup,
 		status: record.status,
 		checked_in_at: record.checkedInAt ?? null,
 		checked_out_at: record.checkedOutAt ?? null,
@@ -305,32 +330,70 @@ export function toAttendanceRecordRow(record: AttendanceRecord): AttendanceRecor
 		substitute_employee_id: record.substituteEmployeeId ?? null,
 		substitute_checked_in_at: record.substituteCheckedInAt ?? null,
 		substitute_confirmed_work_minutes: record.substituteConfirmedWorkMinutes ?? null,
-		updated_by_employee_id: record.updatedByEmployeeId,
+		substitute_hourly_wage_snapshot: record.substituteHourlyWageSnapshot ?? null,
+		temporary_worker_id: record.temporaryWorkerId ?? null,
+		updated_by_employee_id: record.updatedByEmployeeId || null,
+		updated_by_temporary_worker_id: record.updatedByTemporaryWorkerId ?? null,
 		updated_at: record.updatedAt,
 	};
 }
 
-export function toAttendanceLog(row: AttendanceLogRow): AttendanceLogRecord {
+export function toAttendanceLog(row: AttendanceLogRow, temporaryWorker?: AttendanceTemporaryWorker): AttendanceLogRecord {
 	return {
 		id: row.id,
 		attendanceId: row.attendance_id,
-		employeeId: row.employee_id,
+		employeeId: row.employee_id ?? "",
 		action: row.action,
-		updatedByEmployeeId: row.updated_by_employee_id,
+		updatedByEmployeeId: row.updated_by_employee_id ?? "",
+		updatedByTemporaryWorkerId: row.updated_by_temporary_worker_id ?? undefined,
 		createdAt: row.created_at,
 		message: row.message,
+		substituteConfirmedWorkMinutesSnapshot: row.substitute_confirmed_work_minutes_snapshot ?? undefined,
+		substituteHourlyWageSnapshot: row.substitute_hourly_wage_snapshot ?? undefined,
+		temporaryWorkerId: row.temporary_worker_id ?? undefined,
+		temporaryWorkerName: temporaryWorker?.name,
+		temporaryWorkerPhone: temporaryWorker?.phone,
 	};
 }
 
-export function toAttendanceLogRow(log: AttendanceLogRecord): AttendanceLogRow {
+export function toAttendanceLogRow(log: AttendanceLogRecord, storeId = defaultAttendanceStoreId): AttendanceLogRow {
 	return {
 		id: log.id,
+		store_id: storeId,
 		attendance_id: log.attendanceId,
-		employee_id: log.employeeId,
+		employee_id: log.employeeId || null,
 		action: log.action,
-		updated_by_employee_id: log.updatedByEmployeeId,
+		updated_by_employee_id: log.updatedByEmployeeId || null,
+		updated_by_temporary_worker_id: log.updatedByTemporaryWorkerId ?? null,
 		created_at: log.createdAt,
 		message: log.message,
+		substitute_confirmed_work_minutes_snapshot: log.substituteConfirmedWorkMinutesSnapshot ?? null,
+		substitute_hourly_wage_snapshot: log.substituteHourlyWageSnapshot ?? null,
+		temporary_worker_id: log.temporaryWorkerId ?? null,
+	};
+}
+
+export function toAttendanceTemporaryWorker(row: AttendanceTemporaryWorkerRow): AttendanceTemporaryWorker {
+	return {
+		createdAt: row.created_at,
+		id: row.id,
+		name: row.name,
+		phone: row.phone,
+		updatedAt: row.updated_at,
+	};
+}
+
+export function toAttendanceTemporaryWorkerRow(
+	worker: AttendanceTemporaryWorker,
+	storeId = defaultAttendanceStoreId,
+): AttendanceTemporaryWorkerRow {
+	return {
+		created_at: worker.createdAt,
+		id: worker.id,
+		name: worker.name,
+		phone: worker.phone,
+		store_id: storeId,
+		updated_at: worker.updatedAt,
 	};
 }
 

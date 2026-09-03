@@ -33,6 +33,7 @@ export type TutorialContentBlock =
 			alt: string;
 			id: string;
 			source: ImageSourcePropType;
+			storagePath?: string;
 			type: "image";
 	  };
 

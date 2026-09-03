@@ -15,7 +15,7 @@ const maximumDurationMinutes = 24 * 60;
 type AttendanceDurationPickerProps = {
 	employeeName: string;
 	initialMinutes: number;
-	mode: "attendance" | "substitute";
+	mode: "attendance" | "substitute" | "temporary";
 	onCancel: () => void;
 	onConfirm: (minutes: number) => void;
 };
@@ -60,7 +60,7 @@ export function AttendanceDurationPicker({
 					</View>
 
 					<View style={styles.contractRow}>
-						<AppText.Sm color={AppColors.sub}>계약 근무시간</AppText.Sm>
+						<AppText.Sm color={AppColors.sub}>{mode === "temporary" ? "기본 근무시간" : "계약 근무시간"}</AppText.Sm>
 						<AppText.Base bold color={AppColors.primary}>
 							({formatMinutesAsNumericHours(initialMinutes)})
 						</AppText.Base>
@@ -101,14 +101,14 @@ export function AttendanceDurationPicker({
 							<AppText.Base bold>취소</AppText.Base>
 						</AppPressable>
 						<AppPressable
-							accessibilityLabel={`${mode === "substitute" ? "대타" : "출근"} 근무시간 확인`}
+							accessibilityLabel={`${mode === "temporary" ? "임시근로자" : mode === "substitute" ? "대타" : "출근"} 근무시간 확인`}
 							onPress={() => onConfirm(pendingMinutes)}
 							pressedColor="#003E7A"
 							radius="base"
 							style={styles.confirmButton}
 						>
 							<AppText.Base bold color={AppColors.textOnPrimary}>
-								{mode === "substitute" ? "대타 확인" : "출근 확인"}
+								{mode === "temporary" ? "임시근로 확인" : mode === "substitute" ? "대타 확인" : "출근 확인"}
 							</AppText.Base>
 						</AppPressable>
 					</View>

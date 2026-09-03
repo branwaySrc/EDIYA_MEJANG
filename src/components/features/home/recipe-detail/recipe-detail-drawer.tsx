@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -8,8 +8,8 @@ import { AppText } from "@/components/base/app-text";
 import { RecipeDetailSection } from "@/components/features/home/recipe-detail/recipe-detail-section";
 import { RecipeStepAccordion } from "@/components/features/home/recipe-detail/recipe-step-accordion";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import type { Recipe } from "@/database/recipe/recipe.type";
 import { getRecipeDetail, type RecipeDetail, type RecipeVisual } from "@/database/recipe/recipe-details";
+import type { Recipe } from "@/database/recipe/recipe.type";
 
 export type RecipeDetailDrawerProps = {
 	detail?: RecipeDetail;
@@ -118,7 +118,7 @@ function RecipeServiceAccordion({ title, visuals }: { title: string; visuals: Re
 export function RecipeDetailDrawer({ detail: detailOverride, footer, onClose, open, recipe }: RecipeDetailDrawerProps) {
 	const insets = useSafeAreaInsets();
 	const [progress] = useState(() => new Animated.Value(open ? 1 : 0));
-	const detail = recipe ? detailOverride ?? getRecipeDetail(recipe) : null;
+	const detail = recipe ? (detailOverride ?? getRecipeDetail(recipe)) : null;
 
 	useEffect(() => {
 		Animated.timing(progress, {
@@ -187,7 +187,7 @@ export function RecipeDetailDrawer({ detail: detailOverride, footer, onClose, op
 
 						<RecipeServiceAccordion title="매장으로 준비하기" visuals={detail.storeServing} />
 						<RecipeServiceAccordion title="포장으로 준비하기" visuals={detail.packaging} />
-						<RecipeServiceAccordion title="배달로 준비하기" visuals={detail.delivery} />
+						<RecipeServiceAccordion title="재료 정보" visuals={detail.delivery} />
 						{footer}
 					</ScrollView>
 				</SafeAreaView>

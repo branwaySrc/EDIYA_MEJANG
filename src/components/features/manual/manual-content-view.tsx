@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/base/app-text";
@@ -55,11 +56,17 @@ function renderSection(section: ManagedContentSection) {
 }
 
 export function ManualContentView({ categorySlug }: ManualContentViewProps) {
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const categories = useContentManagementStore(state => state.manualCategories);
 	const allEntries = useContentManagementStore(state => state.manualEntries);
 	const directEntry = allEntries.find(entry => entry.id === categorySlug);
 	const category = categories.find(item => item.slug === categorySlug);
 	const entries = allEntries.filter(entry => entry.categorySlug === categorySlug);
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
 
 	if (directEntry) {
 		return (
@@ -95,6 +102,9 @@ export function ManualContentView({ categorySlug }: ManualContentViewProps) {
 	if (!category) {
 		return (
 			<View style={styles.container}>
+				{contentSyncing ? (
+					<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+				) : null}
 				<AppText.Xl bold color={AppColors.primary}>
 					메뉴얼을 찾을 수 없습니다
 				</AppText.Xl>

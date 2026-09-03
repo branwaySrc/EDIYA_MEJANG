@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
-import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { DynamicTextList } from "@/components/features/sajang/management/dynamic-text-list";
 import {
@@ -11,27 +10,18 @@ import {
 	ManagementOptionSelector,
 	ManagementSection,
 } from "@/components/features/sajang/management/management-ui";
-import {
-	type ManagedVisualDraft,
-	VisualEditorList,
-} from "@/components/features/sajang/management/visual-editor-list";
+import { type ManagedVisualDraft, VisualEditorList } from "@/components/features/sajang/management/visual-editor-list";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import {
-	bakerySubCategories,
-	beverageSubCategories,
-	eventSubCategories,
-} from "@/database/recipe/recipe";
-import type {
-	RecipeDetail,
-	RecipeStep,
-	RecipeVisual,
-} from "@/database/recipe/recipe-details.type";
-import type {
-	Recipe,
-	RecipeCategory,
-	RecipeSubCategory,
-} from "@/database/recipe/recipe.type";
+import { bakerySubCategories, beverageSubCategories, eventSubCategories } from "@/database/recipe/recipe";
+import type { RecipeDetail, RecipeStep, RecipeVisual } from "@/database/recipe/recipe-details.type";
+import type { Recipe, RecipeCategory, RecipeSubCategory } from "@/database/recipe/recipe.type";
 import { getChosung } from "@/lib/chosung-search";
+import {
+	getRecipeDetailStoragePaths,
+	getRemovedStoragePaths,
+	removeContentImagesBestEffortAsync,
+	uploadRecipeDetailImagesAsync,
+} from "@/lib/sajang-content/supabase-content-images";
 import { upsertSupabaseRecipeBundleAsync } from "@/lib/sajang-content/supabase-content-repository";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useSajangMenuContentStore } from "@/store/sajang-menu-content-store";
@@ -51,6 +41,10 @@ type RecipeDetailDraft = {
 	storeServing: ManagedVisualDraft[];
 };
 
+export type RecipeEditorFormRef = {
+	save: () => Promise<void>;
+};
+
 const categoryOptions: readonly { label: string; value: RecipeCategory }[] = [
 	{ label: "음료", value: "음료" },
 	{ label: "베이커리", value: "베이커리" },
@@ -68,6 +62,7 @@ function visualToDraft(visual: RecipeVisual): ManagedVisualDraft {
 		desc: visual.desc ?? visual.description ?? "",
 		id: visual.id,
 		imageUri: visual.image ?? visual.imageUri ?? "",
+		storagePath: visual.storagePath,
 		title: visual.title,
 	};
 }
@@ -76,6 +71,7 @@ function draftToVisual(visual: ManagedVisualDraft): RecipeVisual {
 	return {
 		id: visual.id,
 		image: visual.imageUri || undefined,
+		storagePath: visual.storagePath,
 		title: visual.title.trim() || "이미지",
 		desc: visual.desc.trim() || undefined,
 	};
@@ -136,33 +132,18 @@ function RecipeStepEditor({
 					제조 순서 {index + 1}
 				</AppText.Base>
 				<View style={styles.stepActions}>
-					<AppIcon.Sm
-						accessibilityLabel={`제조 순서 ${index + 1} 위로 이동`}
-						disabled={index === 0}
-						name="chevron-up"
-						onPress={() => onMove(-1)}
-					/>
+					<AppIcon.Sm accessibilityLabel={`제조 순서 ${index + 1} 위로 이동`} disabled={index === 0} name="chevron-up" onPress={() => onMove(-1)} />
 					<AppIcon.Sm
 						accessibilityLabel={`제조 순서 ${index + 1} 아래로 이동`}
 						disabled={index === stepCount - 1}
 						name="chevron-down"
 						onPress={() => onMove(1)}
 					/>
-					<AppIcon.Sm
-						accessibilityLabel={`제조 순서 ${index + 1} 삭제`}
-						color="#B91C1C"
-						name="trash-outline"
-						onPress={onRemove}
-					/>
+					<AppIcon.Sm accessibilityLabel={`제조 순서 ${index + 1} 삭제`} color="#B91C1C" name="trash-outline" onPress={onRemove} />
 				</View>
 			</View>
 
-			<ManagementField
-				label="제조 순서 제목"
-				onChangeText={title => onChange({ ...step, title })}
-				placeholder="예: 베이스 준비"
-				value={step.title}
-			/>
+			<ManagementField label="제조 순서 제목" onChangeText={title => onChange({ ...step, title })} placeholder="예: 베이스 준비" value={step.title} />
 
 			<DynamicTextList
 				addLabel="세부 내용 추가"
@@ -176,31 +157,22 @@ function RecipeStepEditor({
 				<AppText.Sm bold color={AppColors.sub}>
 					제조 순서 이미지
 				</AppText.Sm>
-				<VisualEditorList
-					addLabel="제조 이미지 추가"
-					onChange={visuals => onChange({ ...step, visuals })}
-					visuals={step.visuals}
-				/>
+				<VisualEditorList addLabel="제조 이미지 추가" onChange={visuals => onChange({ ...step, visuals })} visuals={step.visuals} />
 			</View>
 		</View>
 	);
 }
 
-export function RecipeEditorForm({ recipeId }: { recipeId?: string }) {
+export const RecipeEditorForm = forwardRef<RecipeEditorFormRef, { recipeId?: string }>(function RecipeEditorForm({ recipeId }, ref) {
 	const recipes = useSajangMenuContentStore(state => state.recipes);
 	const recipeDetails = useSajangMenuContentStore(state => state.recipeDetails);
 	const upsertRecipeBundle = useSajangMenuContentStore(state => state.upsertRecipeBundle);
 	const showToast = useAppToastStore(state => state.showToast);
-	const existingRecipe = useMemo(
-		() => recipes.find(recipe => recipe.id === recipeId),
-		[recipeId, recipes],
-	);
+	const existingRecipe = useMemo(() => recipes.find(recipe => recipe.id === recipeId), [recipeId, recipes]);
 	const existingDetail = existingRecipe ? recipeDetails[existingRecipe.id] : undefined;
 	const [name, setName] = useState(existingRecipe?.name ?? "");
 	const [category, setCategory] = useState<RecipeCategory>(existingRecipe?.category ?? "음료");
-	const [subCategory, setSubCategory] = useState<RecipeSubCategory>(
-		existingRecipe?.subCategory ?? beverageSubCategories[0],
-	);
+	const [subCategory, setSubCategory] = useState<RecipeSubCategory>(existingRecipe?.subCategory ?? beverageSubCategories[0]);
 	const [detail, setDetail] = useState<RecipeDetailDraft>(() => detailToDraft(existingDetail));
 	const [errorMessage, setErrorMessage] = useState("");
 	const availableSubCategories = subCategoriesByCategory[category];
@@ -255,7 +227,7 @@ export function RecipeEditorForm({ recipeId }: { recipeId?: string }) {
 			subCategory,
 			updatedAt: now,
 		};
-		const recipeDetail: RecipeDetail = {
+		const recipeDetailDraft: RecipeDetail = {
 			delivery: detail.delivery.map(draftToVisual),
 			heroVisuals: detail.heroVisuals.map(draftToVisual),
 			packaging: detail.packaging.map(draftToVisual),
@@ -267,33 +239,35 @@ export function RecipeEditorForm({ recipeId }: { recipeId?: string }) {
 			})),
 			storeServing: detail.storeServing.map(draftToVisual),
 		};
+		let uploadedPaths: string[] = [];
 
 		try {
+			const uploadResult = await uploadRecipeDetailImagesAsync(id, recipeDetailDraft);
+			const recipeDetail = uploadResult.value;
+
+			uploadedPaths = uploadResult.uploadedPaths;
 			await upsertSupabaseRecipeBundleAsync({ detail: recipeDetail, recipe });
 			upsertRecipeBundle({ detail: recipeDetail, recipe });
+			setDetail(detailToDraft(recipeDetail));
 			setErrorMessage("");
 			showToast("저장이 완료되었습니다.");
+			await removeContentImagesBestEffortAsync(
+				getRemovedStoragePaths(getRecipeDetailStoragePaths(existingDetail), getRecipeDetailStoragePaths(recipeDetail)),
+			);
 		} catch (error) {
+			await removeContentImagesBestEffortAsync(uploadedPaths);
 			console.error("Failed to save recipe to Supabase.", error);
 			setErrorMessage("Supabase 저장에 실패했습니다.");
 		}
 	};
 
+	useImperativeHandle(ref, () => ({ save: saveRecipe }));
+
 	return (
 		<View style={styles.container}>
 			<ManagementSection title="메뉴 정보">
-				<ManagementField
-					label="메뉴명"
-					onChangeText={setName}
-					placeholder="예: HOT 아메리카노"
-					value={name}
-				/>
-				<ManagementOptionSelector
-					label="카테고리"
-					onChange={handleCategoryChange}
-					options={categoryOptions}
-					value={category}
-				/>
+				<ManagementField label="메뉴명" onChangeText={setName} placeholder="예: HOT 아메리카노" value={name} />
+				<ManagementOptionSelector label="카테고리" onChange={handleCategoryChange} options={categoryOptions} value={category} />
 				<ManagementOptionSelector
 					label="세부 카테고리"
 					onChange={setSubCategory}
@@ -342,24 +316,15 @@ export function RecipeEditorForm({ recipeId }: { recipeId?: string }) {
 			</ManagementSection>
 
 			<ManagementSection title="매장으로 준비하기">
-				<VisualEditorList
-					onChange={storeServing => setDetail(current => ({ ...current, storeServing }))}
-					visuals={detail.storeServing}
-				/>
+				<VisualEditorList onChange={storeServing => setDetail(current => ({ ...current, storeServing }))} visuals={detail.storeServing} />
 			</ManagementSection>
 
 			<ManagementSection title="포장으로 준비하기">
-				<VisualEditorList
-					onChange={packaging => setDetail(current => ({ ...current, packaging }))}
-					visuals={detail.packaging}
-				/>
+				<VisualEditorList onChange={packaging => setDetail(current => ({ ...current, packaging }))} visuals={detail.packaging} />
 			</ManagementSection>
 
-			<ManagementSection title="배달로 준비하기">
-				<VisualEditorList
-					onChange={delivery => setDetail(current => ({ ...current, delivery }))}
-					visuals={detail.delivery}
-				/>
+			<ManagementSection title="재료 정보">
+				<VisualEditorList onChange={delivery => setDetail(current => ({ ...current, delivery }))} visuals={detail.delivery} />
 			</ManagementSection>
 
 			{errorMessage ? (
@@ -369,24 +334,9 @@ export function RecipeEditorForm({ recipeId }: { recipeId?: string }) {
 					</AppText.Sm>
 				</View>
 			) : null}
-
-			<View style={styles.saveArea}>
-				<AppPressable
-					accessibilityLabel="메뉴 저장"
-					onPress={saveRecipe}
-					pressedColor="#003E7A"
-					radius="base"
-					style={styles.saveButton}
-				>
-					<AppIcon.Sm color={AppColors.textOnPrimary} name="save-outline" pressable={false} />
-					<AppText.Base bold color={AppColors.textOnPrimary}>
-						저장
-					</AppText.Base>
-				</AppPressable>
-			</View>
 		</View>
 	);
-}
+});
 
 const styles = StyleSheet.create({
 	container: {
@@ -437,16 +387,5 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(185, 28, 28, 0.28)",
 		backgroundColor: "#FEF2F2",
 		padding: AppSpacing.md,
-	},
-	saveArea: {
-		padding: AppSpacing.md,
-	},
-	saveButton: {
-		minHeight: 52,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: AppSpacing.sm,
-		backgroundColor: AppColors.primary,
 	},
 });

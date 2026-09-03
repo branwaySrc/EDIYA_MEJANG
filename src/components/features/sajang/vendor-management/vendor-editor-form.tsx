@@ -12,6 +12,7 @@ import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Vendor } from "@/database/vendors/vendor.type";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useContentManagementStore } from "@/store/content-management-store";
+import { defaultVendorStoreId } from "@/lib/vendors/supabase-vendors-repository";
 
 export function VendorEditorForm({ vendorId }: { vendorId?: string }) {
 	const vendors = useContentManagementStore(state => state.vendors);
@@ -28,8 +29,9 @@ export function VendorEditorForm({ vendorId }: { vendorId?: string }) {
 	const [items, setItems] = useState(existingVendor?.items.join(", ") ?? "");
 	const [memo, setMemo] = useState(existingVendor?.memo ?? "");
 	const [errorMessage, setErrorMessage] = useState("");
+	const [submitting, setSubmitting] = useState(false);
 
-	const saveVendor = () => {
+	const saveVendor = async () => {
 		const trimmedName = name.trim();
 
 		if (!trimmedName) {
@@ -37,6 +39,7 @@ export function VendorEditorForm({ vendorId }: { vendorId?: string }) {
 			return;
 		}
 
+		setSubmitting(true);
 		const vendor: Vendor = {
 			address: address.trim() || undefined,
 			contactName: contactName.trim(),
@@ -48,12 +51,17 @@ export function VendorEditorForm({ vendorId }: { vendorId?: string }) {
 			memo: memo.trim() || undefined,
 			name: trimmedName,
 			phone: phone.trim(),
+			storeId: existingVendor?.storeId ?? defaultVendorStoreId,
 			updatedAt: new Date().toISOString(),
 		};
 
-		upsertVendor(vendor);
-		setErrorMessage("");
-		showToast("저장이 완료되었습니다.");
+		try {
+			await upsertVendor(vendor);
+			setErrorMessage("");
+			showToast("저장이 완료되었습니다.");
+		} finally {
+			setSubmitting(false);
+		}
 	};
 
 	return (
@@ -90,14 +98,15 @@ export function VendorEditorForm({ vendorId }: { vendorId?: string }) {
 			<View style={styles.saveArea}>
 				<AppPressable
 					accessibilityLabel="거래처 저장"
-					onPress={saveVendor}
+					disabled={submitting}
+					onPress={() => void saveVendor()}
 					pressedColor="#003E7A"
 					radius="base"
-					style={styles.saveButton}
+					style={[styles.saveButton, submitting && styles.saveButtonDisabled]}
 				>
 					<AppIcon.Sm color={AppColors.textOnPrimary} name="save-outline" pressable={false} />
 					<AppText.Base bold color={AppColors.textOnPrimary}>
-						저장
+						{submitting ? "저장 중" : "저장"}
 					</AppText.Base>
 				</AppPressable>
 			</View>
@@ -128,5 +137,8 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: AppSpacing.sm,
 		backgroundColor: AppColors.primary,
+	},
+	saveButtonDisabled: {
+		opacity: 0.42,
 	},
 });

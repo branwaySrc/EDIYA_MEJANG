@@ -77,6 +77,8 @@ function ShiftTimelineRow({ entry }: { entry: AttendanceScheduleEntry }) {
 }
 
 export const TodayShiftTimeline = memo(function TodayShiftTimeline({ entries, todayKey }: TodayShiftTimelineProps) {
+	const timedEntries = entries.filter(entry => Boolean(entry.scheduledStart && entry.scheduledEnd));
+
 	return (
 		<View style={styles.section}>
 			<View style={styles.sectionHeader}>
@@ -93,7 +95,7 @@ export const TodayShiftTimeline = memo(function TodayShiftTimeline({ entries, to
 				</View>
 			</View>
 
-			{entries.length === 0 ? (
+			{timedEntries.length === 0 ? (
 				<View style={styles.emptyState}>
 					<AppText.Sm color={AppColors.sub}>오늘 예정된 근무자가 없습니다.</AppText.Sm>
 				</View>
@@ -115,7 +117,7 @@ export const TodayShiftTimeline = memo(function TodayShiftTimeline({ entries, to
 								</View>
 							))}
 						</View>
-						{entries.map(entry => (
+						{timedEntries.map(entry => (
 							<ShiftTimelineRow key={entry.id} entry={entry} />
 						))}
 					</View>

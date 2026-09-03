@@ -4,6 +4,24 @@ export type EmployeeWeekday = "금" | "목" | "수" | "월" | "일" | "토" | "�
 
 export type EmployeeDocumentType = "bankbook_copy" | "contract" | "health_certificate" | "id_card_copy" | "other";
 
+export type EmployeeEmploymentStatus = "active" | "terminated";
+
+export type EmployeeEmploymentPeriod = {
+	endedOn: string | null;
+	id: string;
+	startedOn: string;
+};
+
+export type EmployeeEmploymentPeriodRecord = {
+	created_at: string;
+	employee_id: string;
+	ended_on: string | null;
+	id: string;
+	started_on: string;
+	store_id: string;
+	updated_at: string;
+};
+
 export type Employee = {
 	address: string;
 	bankAccountNumber: string;
@@ -11,6 +29,8 @@ export type Employee = {
 	birthDate: string;
 	createdAt: string;
 	email: string;
+	employmentPeriods?: EmployeeEmploymentPeriod[];
+	employmentStatus: EmployeeEmploymentStatus;
 	hourlyWage: number | null;
 	id: string;
 	joinedAt: string;
@@ -20,6 +40,7 @@ export type Employee = {
 	phone: string;
 	phonePublic: boolean;
 	shiftGroup: EmployeeShiftGroup;
+	terminatedAt: string | null;
 	updatedAt: string;
 	workEndMinutes: number;
 	workDays: EmployeeWeekday[];
@@ -41,6 +62,7 @@ export type EmployeeRecord = {
 	birth_date: string | null;
 	created_at: string;
 	email: string | null;
+	employment_status: EmployeeEmploymentStatus;
 	hourly_wage: number | null;
 	id: string;
 	is_owner: boolean;
@@ -49,6 +71,7 @@ export type EmployeeRecord = {
 	phone: string;
 	phone_public: boolean;
 	shift_group: EmployeeShiftGroup;
+	terminated_at: string | null;
 	updated_at: string;
 	work_end_minutes: number;
 	work_days: EmployeeWeekday[];
@@ -79,12 +102,14 @@ export const employeeTable = {
 	birthDate: "birth_date",
 	createdAt: "created_at",
 	email: "email",
+	employmentStatus: "employment_status",
 	hourlyWage: "hourly_wage",
 	id: "id",
 	name: "name",
 	phone: "phone",
 	phonePublic: "phone_public",
 	shiftGroup: "shift_group",
+	terminatedAt: "terminated_at",
 	updatedAt: "updated_at",
 	workDays: "work_days",
 	workEndMinutes: "work_end_minutes",

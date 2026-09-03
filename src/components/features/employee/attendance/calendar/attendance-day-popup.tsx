@@ -1,34 +1,44 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
-import {
-	attendanceStatusLabels,
-	formatMinutesAsNumericHours,
-	shiftColors,
-} from "@/components/features/employee/attendance/attendance-ui";
+import { attendanceStatusLabels, formatMinutesAsNumericHours, shiftColors } from "@/components/features/employee/attendance/attendance-ui";
 import { AttendanceDurationPicker } from "@/components/features/employee/attendance/calendar/attendance-duration-picker";
 import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
-import { AppColors, AppSpacing } from "@/constants/theme";
+import { AppColors, AppFonts, AppSpacing } from "@/constants/theme";
 import type { AttendanceScheduleEntry } from "@/database/employee/attendance.type";
+import { employeeShiftGroups } from "@/database/employee/employee";
 import type { Employee } from "@/database/employee/employee.type";
-import {
-	buildAttendanceGreeting,
-	type AttendanceFeedbackPayload,
-} from "@/lib/attendance-greeting";
+import { buildAttendanceGreeting, type AttendanceFeedbackPayload } from "@/lib/attendance-greeting";
 import { formatKoreaDateLabel } from "@/lib/korea-date";
 import { useAttendanceStore } from "@/store/attendance-store";
 
 export type AttendanceDayPopupProps = {
+	allowTemporaryWorker?: boolean;
 	dateKey?: string | null;
 	entries: AttendanceScheduleEntry[];
 	monthEntries: AttendanceScheduleEntry[];
 	onClose: () => void;
 	onFeedback: (payload: AttendanceFeedbackPayload) => void;
+	onRegisterTemporaryWorker?: (payload: TemporaryWorkerRegistrationPayload) => void;
 	todayKey: string;
+};
+
+export type TemporaryWorkerRegistrationPayload = {
+	confirmedWorkMinutes: number;
+	entry: AttendanceScheduleEntry;
+	hourlyWage: number;
+	name: string;
+	phone: string;
+};
+
+type TemporaryWorkerDraft = {
+	hourlyWage: string;
+	name: string;
+	phone: string;
 };
 
 type PendingRegistration =
@@ -40,22 +50,63 @@ type PendingRegistration =
 			entry: AttendanceScheduleEntry;
 			mode: "substitute";
 			substituteEmployee: Employee;
+	  }
+	| {
+			entry: AttendanceScheduleEntry;
+			mode: "temporary";
+			temporaryWorker: TemporaryWorkerDraft;
 	  };
 
-function getSubstituteCandidates(
-	entry: AttendanceScheduleEntry,
-	entries: AttendanceScheduleEntry[],
-	employees: Employee[],
-) {
+const emptyTemporaryWorkerDraft: TemporaryWorkerDraft = {
+	hourlyWage: "",
+	name: "",
+	phone: "",
+};
+
+const vacantShiftIds = {
+	오픈: "open",
+	미들: "middle",
+	마감: "close",
+} as const;
+
+const shiftBadgeBackgroundColors: Record<AttendanceScheduleEntry["shiftGroup"], string> = {
+	오픈: "#E8F2FC",
+	미들: "#E7F5F3",
+	마감: "#F1F5F9",
+};
+
+const vacantTextColor = "#64748B";
+
+function createVacantEntry(dateKey: string, shiftGroup: AttendanceScheduleEntry["shiftGroup"], todayKey: string): AttendanceScheduleEntry {
+	return {
+		id: `vacant-${dateKey}-${vacantShiftIds[shiftGroup]}`,
+		employeeId: "",
+		employeeName: "비어있음",
+		isVacantSlot: true,
+		scheduledEnd: "",
+		scheduledMinutes: 0,
+		scheduledStart: "",
+		shiftGroup,
+		status: dateKey < todayKey ? "missed" : "scheduled",
+		updatedAt: `${dateKey}T00:00:00.000Z`,
+		updatedByEmployeeId: "",
+		workDate: dateKey,
+	};
+}
+
+function getEmployeeContractMinutes(employee: Employee) {
+	const duration = employee.workEndMinutes - employee.workStartMinutes;
+
+	return duration > 0 ? duration : 24 * 60 + duration;
+}
+
+function getSubstituteCandidates(entry: AttendanceScheduleEntry, entries: AttendanceScheduleEntry[], employees: Employee[]) {
 	const unavailableEmployeeIds = new Set(
-		entries.flatMap(dayEntry => [
-			dayEntry.employeeId,
-			...(dayEntry.substituteEmployeeId ? [dayEntry.substituteEmployeeId] : []),
-		]),
+		entries.flatMap(dayEntry => [dayEntry.employeeId, ...(dayEntry.substituteEmployeeId ? [dayEntry.substituteEmployeeId] : [])]),
 	);
 
 	return employees
-		.filter(employee => employee.id !== entry.employeeId && !unavailableEmployeeIds.has(employee.id))
+		.filter(employee => employee.terminatedAt === null && employee.id !== entry.employeeId && !unavailableEmployeeIds.has(employee.id))
 		.sort((left, right) => {
 			const leftPriority = left.shiftGroup === entry.shiftGroup ? 0 : 1;
 			const rightPriority = right.shiftGroup === entry.shiftGroup ? 0 : 1;
@@ -64,11 +115,13 @@ function getSubstituteCandidates(
 }
 
 export function AttendanceDayPopup({
+	allowTemporaryWorker = false,
 	dateKey,
 	entries,
 	monthEntries,
 	onClose,
 	onFeedback,
+	onRegisterTemporaryWorker,
 	todayKey,
 }: AttendanceDayPopupProps) {
 	const employees = useAttendanceEmployees();
@@ -77,10 +130,25 @@ export function AttendanceDayPopup({
 	const registerSubstitute = useAttendanceStore(state => state.registerSubstitute);
 	const cancelSubstitute = useAttendanceStore(state => state.cancelSubstitute);
 	const [selectingSubstituteForId, setSelectingSubstituteForId] = useState<string | null>(null);
+	const [temporaryWorkerFormForId, setTemporaryWorkerFormForId] = useState<string | null>(null);
+	const [temporaryWorkerDraft, setTemporaryWorkerDraft] = useState<TemporaryWorkerDraft>(emptyTemporaryWorkerDraft);
 	const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
 	const [toastMessage, setToastMessage] = useState<string | null>(null);
 	const [toastProgress] = useState(() => new Animated.Value(0));
 	const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const displayEntries = useMemo(() => {
+		if (!dateKey) {
+			return [];
+		}
+
+		return employeeShiftGroups.flatMap(shiftGroup => {
+			const shiftEntries = entries
+				.filter(entry => entry.shiftGroup === shiftGroup)
+				.sort((left, right) => left.scheduledStart.localeCompare(right.scheduledStart) || left.employeeName.localeCompare(right.employeeName, "ko"));
+
+			return shiftEntries.length > 0 ? shiftEntries : [createVacantEntry(dateKey, shiftGroup, todayKey)];
+		});
+	}, [dateKey, entries, todayKey]);
 
 	useEffect(
 		() => () => {
@@ -133,6 +201,8 @@ export function AttendanceDayPopup({
 		toastProgress.setValue(0);
 		setToastMessage(null);
 		setSelectingSubstituteForId(null);
+		setTemporaryWorkerFormForId(null);
+		setTemporaryWorkerDraft(emptyTemporaryWorkerDraft);
 		setPendingRegistration(null);
 		onClose();
 	}, [onClose, toastProgress]);
@@ -169,7 +239,12 @@ export function AttendanceDayPopup({
 			}
 
 			setPendingRegistration({
-				entry,
+				entry: entry.isVacantSlot
+					? {
+							...entry,
+							scheduledMinutes: getEmployeeContractMinutes(substituteEmployee),
+						}
+					: entry,
 				mode: "substitute",
 				substituteEmployee,
 			});
@@ -184,10 +259,27 @@ export function AttendanceDayPopup({
 			}
 
 			const { entry } = pendingRegistration;
-			const substituteEmployee =
-				pendingRegistration.mode === "substitute"
-					? pendingRegistration.substituteEmployee
-					: undefined;
+			if (pendingRegistration.mode === "temporary") {
+				const hourlyWage = Number(pendingRegistration.temporaryWorker.hourlyWage);
+
+				if (!onRegisterTemporaryWorker) {
+					setPendingRegistration(null);
+					showToast("DB 연결이 완료되면 임시근로자를 저장할 수 있습니다.");
+					return;
+				}
+
+				onRegisterTemporaryWorker({
+					confirmedWorkMinutes,
+					entry,
+					hourlyWage,
+					name: pendingRegistration.temporaryWorker.name.trim(),
+					phone: pendingRegistration.temporaryWorker.phone,
+				});
+				handleClose();
+				return;
+			}
+
+			const substituteEmployee = pendingRegistration.mode === "substitute" ? pendingRegistration.substituteEmployee : undefined;
 			const greeting = buildAttendanceGreeting({
 				entry,
 				monthEntries,
@@ -195,7 +287,15 @@ export function AttendanceDayPopup({
 			});
 
 			if (substituteEmployee) {
-				registerSubstitute(entry, substituteEmployee.id, confirmedWorkMinutes);
+				const substituteHourlyWage = substituteEmployee.hourlyWage;
+
+				if (!Number.isFinite(substituteHourlyWage) || !substituteHourlyWage || substituteHourlyWage <= 0) {
+					setPendingRegistration(null);
+					showToast(`${substituteEmployee.name} 직원의 시급 정보를 먼저 등록해 주세요.`);
+					return;
+				}
+
+				void registerSubstitute(entry, substituteEmployee.id, confirmedWorkMinutes, substituteHourlyWage);
 			} else {
 				registerAttendance(entry, confirmedWorkMinutes);
 			}
@@ -203,14 +303,39 @@ export function AttendanceDayPopup({
 			handleClose();
 			onFeedback(greeting);
 		},
-		[
-			handleClose,
-			monthEntries,
-			onFeedback,
-			pendingRegistration,
-			registerAttendance,
-			registerSubstitute,
-		],
+		[handleClose, monthEntries, onFeedback, onRegisterTemporaryWorker, pendingRegistration, registerAttendance, registerSubstitute, showToast],
+	);
+
+	const handleTemporaryWorkerRegistration = useCallback(
+		(entry: AttendanceScheduleEntry) => {
+			const name = temporaryWorkerDraft.name.trim();
+			const phone = temporaryWorkerDraft.phone.replace(/\D/g, "");
+			const hourlyWage = Number(temporaryWorkerDraft.hourlyWage);
+
+			if (!name) {
+				showToast("임시근로자 이름을 입력해 주세요.");
+				return;
+			}
+
+			if (phone.length < 10 || phone.length > 11) {
+				showToast("연락처를 10~11자리 숫자로 입력해 주세요.");
+				return;
+			}
+
+			if (!Number.isFinite(hourlyWage) || hourlyWage <= 0) {
+				showToast("시급을 숫자로 입력해 주세요.");
+				return;
+			}
+
+			setPendingRegistration({
+				entry: entry.isVacantSlot && entry.scheduledMinutes === 0
+					? { ...entry, scheduledMinutes: 4 * 60 }
+					: entry,
+				mode: "temporary",
+				temporaryWorker: { hourlyWage: String(hourlyWage), name, phone },
+			});
+		},
+		[showToast, temporaryWorkerDraft],
 	);
 
 	const handleSubstituteSelection = useCallback(
@@ -225,18 +350,14 @@ export function AttendanceDayPopup({
 			}
 
 			setSelectingSubstituteForId(current => (current === entry.id ? null : entry.id));
+			setTemporaryWorkerFormForId(null);
+			setTemporaryWorkerDraft(emptyTemporaryWorkerDraft);
 		},
 		[handleClose, onFeedback, todayKey],
 	);
 
 	return (
-		<Modal
-			animationType="fade"
-			onRequestClose={handleClose}
-			statusBarTranslucent
-			transparent
-			visible={Boolean(dateKey)}
-		>
+		<Modal animationType="fade" onRequestClose={handleClose} statusBarTranslucent transparent visible={Boolean(dateKey)}>
 			<View style={styles.layer}>
 				<Pressable accessibilityLabel="출근 명단 팝업 닫기" onPress={handleClose} style={styles.backdrop} />
 				<SafeAreaView edges={["left", "right"]} style={styles.safeArea}>
@@ -244,110 +365,113 @@ export function AttendanceDayPopup({
 						<View style={styles.header}>
 							<View style={styles.headerText}>
 								<AppText.Lg bold>출근 명단</AppText.Lg>
-								{dateKey && <AppText.Xs color={AppColors.sub}>{formatKoreaDateLabel(dateKey)}</AppText.Xs>}
+								{dateKey && <AppText.Base color={AppColors.sub}>{formatKoreaDateLabel(dateKey)}</AppText.Base>}
 							</View>
 							<AppIcon.Base accessibilityLabel="팝업 닫기" name="close" onPress={handleClose} />
 						</View>
 
-						<ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-							{entries.length === 0 ? (
-								<View style={styles.emptyState}>
-									<AppText.Sm color={AppColors.sub}>등록된 근무 일정이 없습니다.</AppText.Sm>
-								</View>
-							) : (
-								entries.map(entry => {
-									const completed = entry.status === "completed";
-									const hasSubstitute = Boolean(entry.substituteEmployeeId);
-									const confirmedWorkMinutes = completed
-										? hasSubstitute
-											? entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes
-											: entry.confirmedWorkMinutes ?? entry.scheduledMinutes
-										: null;
-									const selectingSubstitute = selectingSubstituteForId === entry.id;
-									const candidates = selectingSubstitute
-										? getSubstituteCandidates(entry, entries, employees)
-										: [];
+						<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+							{displayEntries.map(entry => {
+								const completed = entry.status === "completed";
+								const substituteName = entry.temporaryWorkerName ?? entry.substituteEmployeeName;
+								const hasSubstitute = Boolean(entry.substituteEmployeeId || entry.temporaryWorkerId);
+								const confirmedWorkMinutes = completed
+									? hasSubstitute
+										? (entry.substituteConfirmedWorkMinutes ?? entry.scheduledMinutes)
+										: (entry.confirmedWorkMinutes ?? entry.scheduledMinutes)
+									: null;
+								const selectingSubstitute = selectingSubstituteForId === entry.id;
+								const showingTemporaryWorkerForm = temporaryWorkerFormForId === entry.id;
+								const candidates = selectingSubstitute ? getSubstituteCandidates(entry, entries, employees) : [];
 
-									return (
-										<View key={entry.id} style={styles.employeeRow}>
-											<View style={styles.employeeSummary}>
-												<View style={styles.employeeInfo}>
-													<View style={styles.nameRow}>
-														<View style={[styles.shiftMark, { backgroundColor: shiftColors[entry.shiftGroup] }]} />
-														<AppText.Base
-															bold
-															numberOfLines={1}
-															style={hasSubstitute ? styles.replacedEmployeeName : undefined}
-														>
-															{entry.employeeName}
-														</AppText.Base>
-														{!hasSubstitute && confirmedWorkMinutes !== null && (
-															<AppText.Base bold color={AppColors.primary}>
-																({formatMinutesAsNumericHours(confirmedWorkMinutes)})
-															</AppText.Base>
-														)}
-														{entry.substituteEmployeeName && (
-															<View style={styles.substituteBadge}>
-																<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
-																	{entry.substituteEmployeeName}
-																	{confirmedWorkMinutes !== null
-																		? ` (${formatMinutesAsNumericHours(confirmedWorkMinutes)})`
-																		: ""}
-																</AppText.Xs>
-															</View>
-														)}
-													</View>
-													<AppText.Xs color={AppColors.sub}>
-														{entry.shiftGroup} · {entry.scheduledStart}–{entry.scheduledEnd}
+								return (
+									<View key={entry.id} style={styles.employeeRow}>
+										<View style={styles.employeeSummary}>
+											<View style={styles.employeeInfo}>
+												<View style={[styles.shiftBadge, { backgroundColor: shiftBadgeBackgroundColors[entry.shiftGroup] }]}>
+													<AppText.Xs bold color={shiftColors[entry.shiftGroup]}>
+														{entry.shiftGroup}
 													</AppText.Xs>
 												</View>
-												<View
-													style={[
-														styles.statusBadge,
-														hasSubstitute
-															? styles.substituteStatus
+												<View style={styles.nameRow}>
+													<AppText.Base
+														bold
+														color={entry.isVacantSlot ? vacantTextColor : undefined}
+														numberOfLines={1}
+														style={hasSubstitute && !entry.isVacantSlot ? styles.replacedEmployeeName : undefined}
+													>
+														{entry.employeeName}
+													</AppText.Base>
+													{!hasSubstitute && confirmedWorkMinutes !== null && (
+														<AppText.Base bold color={AppColors.primary}>
+															({formatMinutesAsNumericHours(confirmedWorkMinutes)})
+														</AppText.Base>
+													)}
+													{substituteName && (
+														<View style={styles.substituteBadge}>
+															<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
+																{substituteName}
+																{confirmedWorkMinutes !== null ? ` (${formatMinutesAsNumericHours(confirmedWorkMinutes)})` : ""}
+															</AppText.Xs>
+														</View>
+													)}
+												</View>
+												{!entry.isVacantSlot && (
+													<AppText.Base bold color={AppColors.sub}>
+														{entry.scheduledStart}–{entry.scheduledEnd}
+													</AppText.Base>
+												)}
+											</View>
+											<View
+												style={[
+													styles.statusBadge,
+													hasSubstitute
+														? styles.substituteStatus
+														: entry.isVacantSlot
+															? styles.vacantStatus
 															: completed
 																? styles.completedStatus
 																: entry.status === "missed"
 																	? styles.missedStatus
 																	: styles.scheduledStatus,
-													]}
+												]}
+											>
+												<AppText.Xs
+													bold={completed}
+													color={completed ? AppColors.textOnPrimary : entry.isVacantSlot ? vacantTextColor : AppColors.sub}
 												>
-													<AppText.Xs
-														bold={completed}
-														color={completed ? AppColors.textOnPrimary : AppColors.sub}
-													>
-														{hasSubstitute ? "대타 완료" : attendanceStatusLabels[entry.status]}
-													</AppText.Xs>
-												</View>
+													{hasSubstitute ? "대타 완료" : entry.isVacantSlot ? "비어있음" : attendanceStatusLabels[entry.status]}
+												</AppText.Xs>
 											</View>
+										</View>
 
-											<View style={styles.actionRow}>
-												{completed ? (
-													<AppPressable
-														key={`cancel-${entry.id}`}
-														accessibilityLabel={`${entry.employeeName} ${hasSubstitute ? "대타 출근" : "출근"} 취소하기`}
-														accessibilityRole="button"
-														border
-														onPress={() => {
-															if (hasSubstitute) {
-																cancelSubstitute(entry);
-																showToast("대타 출근이 취소되었습니다.");
-															} else {
-																cancelAttendance(entry);
-																showToast("출근이 취소되었습니다.");
-															}
-															setSelectingSubstituteForId(null);
-														}}
-														radius="base"
-														style={styles.cancelButton}
-													>
-														<AppText.Sm bold color="#B42318">
-															취소하기
-														</AppText.Sm>
-													</AppPressable>
-												) : (
-													<>
+										<View style={styles.actionRow}>
+											{completed ? (
+												<AppPressable
+													key={`cancel-${entry.id}`}
+													accessibilityLabel={`${entry.employeeName} ${hasSubstitute ? "대타 출근" : "출근"} 취소하기`}
+													accessibilityRole="button"
+													border
+													onPress={() => {
+														if (hasSubstitute) {
+															cancelSubstitute(entry);
+															showToast("대타 출근이 취소되었습니다.");
+														} else {
+															cancelAttendance(entry);
+															showToast("출근이 취소되었습니다.");
+														}
+														setSelectingSubstituteForId(null);
+													}}
+													radius="base"
+													style={styles.cancelButton}
+												>
+													<AppText.Sm bold color="#B42318">
+														취소하기
+													</AppText.Sm>
+												</AppPressable>
+											) : (
+												<>
+													{!entry.isVacantSlot && (
 														<AppPressable
 															key={`attendance-${entry.id}`}
 															accessibilityLabel={`${entry.employeeName} 출근 등록`}
@@ -361,59 +485,92 @@ export function AttendanceDayPopup({
 																출근
 															</AppText.Sm>
 														</AppPressable>
+													)}
+													<AppPressable
+														accessibilityLabel={`${entry.employeeName} 대타 선택`}
+														accessibilityRole="button"
+														border
+														onPress={() => handleSubstituteSelection(entry)}
+														radius="base"
+														style={styles.substituteButton}
+													>
+														<AppText.Sm bold color="#B42318">
+															대타
+														</AppText.Sm>
+													</AppPressable>
+												</>
+											)}
+										</View>
+
+										{selectingSubstitute && (
+											<View style={styles.substitutePicker}>
+												<AppText.Xs bold color={AppColors.sub}>
+													대타 근무자 선택
+												</AppText.Xs>
+												<View style={styles.candidateGrid}>
+													{candidates.length === 0 ? (
+														<AppText.Sm color={AppColors.sub}>선택 가능한 근무자가 없습니다.</AppText.Sm>
+													) : (
+														candidates.map(candidate => (
+															<AppPressable
+																key={candidate.id}
+																accessibilityLabel={`${candidate.name} 대타 등록`}
+																accessibilityRole="button"
+																border
+																onPress={() => handleSubstituteRegistration(entry, candidate)}
+																radius="base"
+																style={styles.candidateButton}
+															>
+																<AppText.Sm bold numberOfLines={1}>
+																	{candidate.name}
+																</AppText.Sm>
+																<AppText.Xs color={AppColors.sub}>{candidate.shiftGroup}</AppText.Xs>
+															</AppPressable>
+														))
+													)}
+												</View>
+												{allowTemporaryWorker && (
+													<>
 														<AppPressable
-															accessibilityLabel={`${entry.employeeName} 대타 선택`}
+															accessibilityLabel="임시근로자 정보 입력"
 															accessibilityRole="button"
 															border
-															onPress={() => handleSubstituteSelection(entry)}
+															onPress={() => {
+																setTemporaryWorkerFormForId(current => (current === entry.id ? null : entry.id));
+																setTemporaryWorkerDraft(emptyTemporaryWorkerDraft);
+															}}
 															radius="base"
-															style={styles.substituteButton}
+															style={styles.temporaryWorkerButton}
 														>
-															<AppText.Sm bold color="#B42318">
-																대타
-															</AppText.Sm>
+															<AppText.Sm bold color={AppColors.primary}>임시근로자</AppText.Sm>
 														</AppPressable>
+														{showingTemporaryWorkerForm && (
+															<View style={styles.temporaryWorkerForm}>
+																<AppText.Xs color={AppColors.sub}>퇴사자 또는 외부 임시근로자의 정보를 입력해 주세요.</AppText.Xs>
+																<View style={styles.inputGroup}>
+																	<AppText.Xs bold color={AppColors.sub}>이름</AppText.Xs>
+																	<TextInput accessibilityLabel="임시근로자 이름" autoCapitalize="none" autoFocus disableFullscreenUI onChangeText={name => setTemporaryWorkerDraft(current => ({ ...current, name }))} placeholder="이름 입력" placeholderTextColor={AppColors.placeholder} returnKeyType="next" style={styles.textInput} value={temporaryWorkerDraft.name} />
+																</View>
+																<View style={styles.inputGroup}>
+																	<AppText.Xs bold color={AppColors.sub}>연락처</AppText.Xs>
+																	<TextInput accessibilityLabel="임시근로자 연락처" disableFullscreenUI keyboardType="phone-pad" maxLength={11} onChangeText={phone => setTemporaryWorkerDraft(current => ({ ...current, phone: phone.replace(/\D/g, "") }))} placeholder="숫자만 입력" placeholderTextColor={AppColors.placeholder} style={styles.textInput} value={temporaryWorkerDraft.phone} />
+																</View>
+																<View style={styles.inputGroup}>
+																	<AppText.Xs bold color={AppColors.sub}>시급</AppText.Xs>
+																	<TextInput accessibilityLabel="임시근로자 시급" disableFullscreenUI keyboardType="number-pad" maxLength={7} onChangeText={hourlyWage => setTemporaryWorkerDraft(current => ({ ...current, hourlyWage: hourlyWage.replace(/\D/g, "") }))} placeholder="예: 10320" placeholderTextColor={AppColors.placeholder} style={styles.textInput} value={temporaryWorkerDraft.hourlyWage} />
+																</View>
+																<AppPressable accessibilityLabel="임시근로자 근무시간 입력" accessibilityRole="button" onPress={() => handleTemporaryWorkerRegistration(entry)} pressedColor="#003E7A" radius="base" style={styles.temporaryWorkerConfirmButton}>
+																	<AppText.Sm bold color={AppColors.textOnPrimary}>근무시간 입력하기</AppText.Sm>
+																</AppPressable>
+															</View>
+														)}
 													</>
 												)}
 											</View>
-
-											{selectingSubstitute && (
-												<View style={styles.substitutePicker}>
-													<AppText.Xs bold color={AppColors.sub}>
-														대타 근무자 선택
-													</AppText.Xs>
-													<View style={styles.candidateGrid}>
-														{candidates.length === 0 ? (
-															<AppText.Sm color={AppColors.sub}>
-																선택 가능한 근무자가 없습니다.
-															</AppText.Sm>
-														) : (
-															candidates.map(candidate => (
-																<AppPressable
-																	key={candidate.id}
-																	accessibilityLabel={`${candidate.name} 대타 등록`}
-																	accessibilityRole="button"
-																	border
-																	onPress={() =>
-																		handleSubstituteRegistration(entry, candidate)
-																	}
-																	radius="base"
-																	style={styles.candidateButton}
-																>
-																	<AppText.Sm bold numberOfLines={1}>
-																		{candidate.name}
-																	</AppText.Sm>
-																	<AppText.Xs color={AppColors.sub}>{candidate.shiftGroup}</AppText.Xs>
-																</AppPressable>
-															))
-														)}
-													</View>
-												</View>
-											)}
-										</View>
-									);
-								})
-							)}
+										)}
+									</View>
+								);
+							})}
 						</ScrollView>
 					</View>
 				</SafeAreaView>
@@ -452,7 +609,9 @@ export function AttendanceDayPopup({
 						employeeName={
 							pendingRegistration.mode === "substitute"
 								? pendingRegistration.substituteEmployee.name
-								: pendingRegistration.entry.employeeName
+								: pendingRegistration.mode === "temporary"
+									? pendingRegistration.temporaryWorker.name
+									: pendingRegistration.entry.employeeName
 						}
 						initialMinutes={pendingRegistration.entry.scheduledMinutes}
 						mode={pendingRegistration.mode}
@@ -533,18 +692,23 @@ const styles = StyleSheet.create({
 	employeeInfo: {
 		flex: 1,
 		minWidth: 0,
-		gap: 2,
+		gap: AppSpacing.xs,
 	},
 	nameRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		flexWrap: "wrap",
 		gap: AppSpacing.xs,
+		paddingBottom: 4,
 	},
-	shiftMark: {
-		width: 4,
-		height: 24,
-		borderRadius: 2,
+	shiftBadge: {
+		alignSelf: "flex-start",
+		minWidth: 42,
+		minHeight: 22,
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: 4,
+		paddingHorizontal: AppSpacing.xs,
 	},
 	replacedEmployeeName: {
 		color: AppColors.sub,
@@ -569,6 +733,11 @@ const styles = StyleSheet.create({
 	},
 	scheduledStatus: {
 		backgroundColor: "rgba(0, 75, 147, 0.1)",
+	},
+	vacantStatus: {
+		borderWidth: 1,
+		borderColor: "#CBD5E1",
+		backgroundColor: "#F8FAFC",
 	},
 	completedStatus: {
 		backgroundColor: AppColors.primary,
@@ -634,10 +803,48 @@ const styles = StyleSheet.create({
 		backgroundColor: AppColors.background,
 		paddingHorizontal: AppSpacing.sm,
 	},
+	temporaryWorkerButton: {
+		width: "100%",
+		minHeight: 42,
+		alignItems: "center",
+		justifyContent: "center",
+		borderColor: "rgba(0, 75, 147, 0.34)",
+		backgroundColor: "#F5F9FD",
+	},
+	temporaryWorkerForm: {
+		gap: AppSpacing.sm,
+		borderTopWidth: 1,
+		borderTopColor: "#D7E4F0",
+		paddingTop: AppSpacing.sm,
+	},
+	inputGroup: {
+		gap: AppSpacing.xs,
+	},
+	textInput: {
+		width: "100%",
+		minHeight: 44,
+		borderWidth: 1,
+		borderColor: "#CBD5E1",
+		borderRadius: 4,
+		backgroundColor: AppColors.background,
+		color: AppColors.text,
+		fontFamily: AppFonts.regular,
+		fontSize: 14,
+		paddingHorizontal: AppSpacing.sm,
+		paddingVertical: AppSpacing.sm,
+	},
+	temporaryWorkerConfirmButton: {
+		width: "100%",
+		minHeight: 44,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: AppColors.primary,
+		marginTop: AppSpacing.xs,
+	},
 	toastViewport: {
 		position: "absolute",
+		top: AppSpacing.xl,
 		right: 0,
-		bottom: AppSpacing.xl,
 		left: 0,
 		width: "100%",
 		alignItems: "center",

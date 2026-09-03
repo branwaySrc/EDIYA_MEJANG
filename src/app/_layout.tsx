@@ -2,12 +2,15 @@ import { Inter_400Regular, Inter_700Bold, useFonts } from "@expo-google-fonts/in
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { DefaultTheme, Stack, ThemeProvider, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BackHandler, Platform, StyleSheet, ToastAndroid, View } from "react-native";
 
 import { AppToast } from "@/components/ui/app-toast";
 import { AppColors } from "@/constants/theme";
-import { initializeLocalContentPackDatabaseAsync } from "@/lib/content-pack/local-content-pack";
+import { readActiveRecipeSearchCacheAsync } from "@/lib/content-cache/recipe-search-cache";
+import { useAttendanceStore } from "@/store/attendance-store";
+import { useContentManagementStore } from "@/store/content-management-store";
+import { useEmployeeManagementStore } from "@/store/employee-management-store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,6 +34,9 @@ export default function RootLayout() {
 	const pathname = usePathname();
 	const router = useRouter();
 	const lastAndroidBackPressRef = useRef(0);
+	const [contentCacheHydrated, setContentCacheHydrated] = useState(false);
+	const hydrateAttendanceFromRemote = useAttendanceStore(state => state.hydrateFromRemote);
+	const hydrateEmployeesFromRemote = useEmployeeManagementStore(state => state.hydrateFromRemote);
 	const [fontsLoaded, fontError] = useFonts({
 		Inter_400Regular,
 		Inter_700Bold,
@@ -38,16 +44,51 @@ export default function RootLayout() {
 	});
 
 	useEffect(() => {
-		if (fontsLoaded || fontError) {
+		if ((fontsLoaded || fontError) && contentCacheHydrated) {
 			SplashScreen.hideAsync();
 		}
-	}, [fontsLoaded, fontError]);
+	}, [contentCacheHydrated, fontsLoaded, fontError]);
 
 	useEffect(() => {
-		initializeLocalContentPackDatabaseAsync().catch(error => {
-			console.error("Failed to initialize local content pack database.", error);
-		});
+		let mounted = true;
+
+		const hydrateContentCache = async () => {
+			try {
+				await useContentManagementStore.persist.rehydrate();
+				const snapshot = await readActiveRecipeSearchCacheAsync();
+
+				if (snapshot) {
+					useContentManagementStore.getState().replaceRecipeSearchContent({
+						findEntries: snapshot.findEntries,
+						recipeDetails: snapshot.recipeDetails,
+						recipes: snapshot.recipes,
+					});
+				}
+			} catch (error) {
+				console.error("Failed to hydrate the recipe/search device cache.", error);
+			} finally {
+				if (mounted) {
+					setContentCacheHydrated(true);
+				}
+			}
+		};
+
+		void hydrateContentCache();
+
+		return () => {
+			mounted = false;
+		};
 	}, []);
+
+	useEffect(() => {
+		const hydrateEmployeesAndAttendance = async () => {
+			await useEmployeeManagementStore.persist.rehydrate();
+			await hydrateEmployeesFromRemote();
+			await hydrateAttendanceFromRemote();
+		};
+
+		void hydrateEmployeesAndAttendance();
+	}, [hydrateAttendanceFromRemote, hydrateEmployeesFromRemote]);
 
 	useEffect(() => {
 		lastAndroidBackPressRef.current = 0;
@@ -78,7 +119,7 @@ export default function RootLayout() {
 		return () => subscription.remove();
 	}, [router]);
 
-	if (!fontsLoaded && !fontError) {
+	if ((!fontsLoaded && !fontError) || !contentCacheHydrated) {
 		return null;
 	}
 

@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
-import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { RecipeReferencePicker } from "@/components/features/sajang/menu-management/recipe-reference-picker";
 import { DynamicTextList } from "@/components/features/sajang/management/dynamic-text-list";
@@ -26,6 +25,12 @@ import type {
 	FindPosEntry,
 } from "@/database/find/find.type";
 import { getChosung } from "@/lib/chosung-search";
+import {
+	getFindEntryStoragePaths,
+	getRemovedStoragePaths,
+	removeContentImagesBestEffortAsync,
+	uploadFindEntryImagesAsync,
+} from "@/lib/sajang-content/supabase-content-images";
 import { upsertSupabaseFindEntryAsync } from "@/lib/sajang-content/supabase-content-repository";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useSajangMenuContentStore } from "@/store/sajang-menu-content-store";
@@ -34,6 +39,10 @@ type FindBlockDraft = {
 	id: string;
 	images: ManagedVisualDraft[];
 	title: string;
+};
+
+export type FindEditorFormRef = {
+	save: () => Promise<void>;
 };
 
 const kindOptions: readonly { label: string; value: FindEntryKind }[] = [
@@ -56,6 +65,7 @@ function imageToDraft(image: FindMaterialDetailImage): ManagedVisualDraft {
 		desc: image.desc ?? "",
 		id: image.id,
 		imageUri: getImageUri(image),
+		storagePath: image.storagePath,
 		title: image.title ?? "",
 	};
 }
@@ -66,6 +76,7 @@ function draftToImage(image: ManagedVisualDraft): FindMaterialDetailImage {
 		desc: image.desc.trim() || undefined,
 		id: image.id,
 		source: image.imageUri ? { uri: image.imageUri } : undefined,
+		storagePath: image.storagePath,
 		title: image.title.trim() || undefined,
 	};
 }
@@ -165,13 +176,16 @@ function FindBlockEditorList({
 	);
 }
 
-export function FindEditorForm({
-	entryId,
-	initialKind = "material",
-}: {
+export const FindEditorForm = forwardRef<FindEditorFormRef, {
 	entryId?: string;
 	initialKind?: FindEntryKind;
-}) {
+}>(function FindEditorForm(
+	{
+		entryId,
+		initialKind = "material",
+	},
+	ref,
+) {
 	const entries = useSajangMenuContentStore(state => state.findEntries);
 	const recipes = useSajangMenuContentStore(state => state.recipes);
 	const upsertFindEntry = useSajangMenuContentStore(state => state.upsertFindEntry);
@@ -248,16 +262,37 @@ export function FindEditorForm({
 			} satisfies FindPosEntry;
 		}
 
+		let uploadedPaths: string[] = [];
+
 		try {
-			await upsertSupabaseFindEntryAsync({ entry: nextEntry });
-			upsertFindEntry(nextEntry);
+			const uploadResult = await uploadFindEntryImagesAsync(nextEntry);
+			const uploadedEntry = uploadResult.value;
+
+			uploadedPaths = uploadResult.uploadedPaths;
+			await upsertSupabaseFindEntryAsync({ entry: uploadedEntry });
+			upsertFindEntry(uploadedEntry);
+			if (uploadedEntry.kind === "material") {
+				setMaterialGroups(uploadedEntry.materialGroups.map(blockToDraft));
+				setStorageLocations(uploadedEntry.storageLocations.map(blockToDraft));
+			} else {
+				setPosImages(uploadedEntry.posImages.map(imageToDraft));
+			}
 			setErrorMessage("");
 			showToast("저장이 완료되었습니다.");
+			await removeContentImagesBestEffortAsync(
+				getRemovedStoragePaths(
+					getFindEntryStoragePaths(existingEntry),
+					getFindEntryStoragePaths(uploadedEntry),
+				),
+			);
 		} catch (error) {
+			await removeContentImagesBestEffortAsync(uploadedPaths);
 			console.error("Failed to save find entry to Supabase.", error);
 			setErrorMessage("Supabase 저장에 실패했습니다.");
 		}
 	};
+
+	useImperativeHandle(ref, () => ({ save: saveEntry }));
 
 	return (
 		<View style={styles.container}>
@@ -337,23 +372,9 @@ export function FindEditorForm({
 				</View>
 			) : null}
 
-			<View style={styles.saveArea}>
-				<AppPressable
-					accessibilityLabel="통합검색 아이템 저장"
-					onPress={saveEntry}
-					pressedColor="#003E7A"
-					radius="base"
-					style={styles.saveButton}
-				>
-					<AppIcon.Sm color={AppColors.textOnPrimary} name="save-outline" pressable={false} />
-					<AppText.Base bold color={AppColors.textOnPrimary}>
-						저장
-					</AppText.Base>
-				</AppPressable>
-			</View>
 		</View>
 	);
-}
+});
 
 const styles = StyleSheet.create({
 	container: {
@@ -388,16 +409,5 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(185, 28, 28, 0.28)",
 		backgroundColor: "#FEF2F2",
 		padding: AppSpacing.md,
-	},
-	saveArea: {
-		padding: AppSpacing.md,
-	},
-	saveButton: {
-		minHeight: 52,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: AppSpacing.sm,
-		backgroundColor: AppColors.primary,
 	},
 });

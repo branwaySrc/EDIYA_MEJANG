@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
@@ -10,6 +11,12 @@ import { useContentManagementStore } from "@/store/content-management-store";
 
 export default function StoreVendorsScreen() {
 	const vendors = useContentManagementStore(state => state.vendors);
+	const hydrateVendorsFromRemote = useContentManagementStore(state => state.hydrateVendorsFromRemote);
+	const vendorSyncing = useContentManagementStore(state => state.vendorSyncing);
+
+	useEffect(() => {
+		void hydrateVendorsFromRemote();
+	}, [hydrateVendorsFromRemote]);
 
 	return (
 		<AppLayout activeDrawerId="store-vendors" title={appRoutes["store-vendors"].label} type="scrollview" contentContainerStyle={styles.container}>
@@ -30,7 +37,11 @@ export default function StoreVendorsScreen() {
 				<AppText.Lg bold color={AppColors.primary}>
 					거래처
 				</AppText.Lg>
-				{vendors.length === 0 ? (
+				{vendorSyncing ? (
+					<View style={styles.emptyBox}>
+						<AppText.Sm bold color={AppColors.primary}>데이터를 불러오고 있습니다</AppText.Sm>
+					</View>
+				) : vendors.length === 0 ? (
 					<View style={styles.emptyBox}>
 						<AppIcon.Lg color={AppColors.primary} name="business-outline" pressable={false} />
 						<AppText.Sm color={AppColors.sub}>등록된 거래처가 없습니다.</AppText.Sm>

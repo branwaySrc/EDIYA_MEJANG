@@ -40,11 +40,14 @@ export function ManagementDetailActions({ onDelete, onEdit }: ManagementDetailAc
 					accessibilityLabel="아이템 삭제"
 					accessibilityRole="button"
 					onPress={() => setConfirmOpen(true)}
+					pressedColor="#991B1B"
+					radius="base"
 					style={styles.deleteButton}
 				>
-					<AppText.Sm color="#B91C1C" style={styles.deleteLabel}>
-						삭제
-					</AppText.Sm>
+					<AppIcon.Sm color={AppColors.textOnPrimary} name="trash-outline" pressable={false} />
+					<AppText.Base bold color={AppColors.textOnPrimary}>
+						삭제하기
+					</AppText.Base>
 				</AppPressable>
 			</View>
 
@@ -76,12 +79,13 @@ const styles = StyleSheet.create({
 		backgroundColor: AppColors.primary,
 	},
 	deleteButton: {
-		minHeight: 40,
+		width: "100%",
+		minHeight: 52,
+		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
+		gap: AppSpacing.sm,
+		backgroundColor: "#B91C1C",
 		paddingHorizontal: AppSpacing.md,
-	},
-	deleteLabel: {
-		textDecorationLine: "underline",
 	},
 });

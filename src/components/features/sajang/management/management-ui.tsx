@@ -61,11 +61,29 @@ export function ManagementHeaderAddButton({ onPress }: { onPress: () => void }) 
 			onPress={onPress}
 			pressedColor="rgba(255, 255, 255, 0.14)"
 			radius="base"
-			style={styles.headerAddButton}
+			style={styles.headerActionButton}
 		>
 			<AppIcon.Sm color={AppColors.textOnPrimary} name="add" pressable={false} />
 			<AppText.Sm bold color={AppColors.textOnPrimary}>
 				추가하기
+			</AppText.Sm>
+		</AppPressable>
+	);
+}
+
+export function ManagementHeaderSaveButton({ onPress }: { onPress: () => void }) {
+	return (
+		<AppPressable
+			accessibilityLabel="메뉴 저장"
+			accessibilityRole="button"
+			onPress={onPress}
+			pressedColor="rgba(255, 255, 255, 0.14)"
+			radius="base"
+			style={styles.headerActionButton}
+		>
+			<AppIcon.Sm color={AppColors.textOnPrimary} name="save-outline" pressable={false} />
+			<AppText.Sm bold color={AppColors.textOnPrimary}>
+				저장하기
 			</AppText.Sm>
 		</AppPressable>
 	);
@@ -264,7 +282,7 @@ const styles = StyleSheet.create({
 		gap: AppSpacing.md,
 		padding: AppSpacing.md,
 	},
-	headerAddButton: {
+	headerActionButton: {
 		minHeight: 36,
 		flexDirection: "row",
 		alignItems: "center",

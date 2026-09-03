@@ -120,7 +120,7 @@ export const HiringSignatureView = memo(function HiringSignatureView() {
 
 			setResult(result);
 			addContract(contractRecord);
-			upsertEmployeeRecord(createEmployeeRecordFromHiringDraft(draft, result));
+			await upsertEmployeeRecord(createEmployeeRecordFromHiringDraft(draft, result));
 			router.replace("/sajang/hiring/complete" as Href);
 		} catch (error) {
 			const nextMessage = error instanceof Error ? error.message : "계약서 처리 중 문제가 발생했습니다.";

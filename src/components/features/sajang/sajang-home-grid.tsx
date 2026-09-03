@@ -17,16 +17,16 @@ type HomeAction = {
 
 const homeActions: HomeAction[] = [
 	{
-		icon: "person-add-outline",
-		label: "신규고용",
-		type: "action",
-		route: "/sajang/hiring/register" as Href,
-	},
-	{
 		icon: "people-outline",
 		label: "직원관리",
 		type: "action",
 		route: "/sajang/employees" as Href,
+	},
+	{
+		icon: "calendar-outline",
+		label: "근무근태",
+		type: "action",
+		route: "/sajang/attendance" as Href,
 	},
 	{
 		icon: "add-circle-outline",

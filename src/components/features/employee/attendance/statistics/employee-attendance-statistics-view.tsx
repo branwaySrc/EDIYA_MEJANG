@@ -32,10 +32,54 @@ export type EmployeeAttendanceStatisticsViewProps = {
 	employeeId: string;
 	monthKey: string;
 	onChangeMonth: (monthKey: string) => void;
+	showOwnerPayroll?: boolean;
 };
 
 function formatDateHistory(dates: string[]) {
 	return dates.length === 0 ? "없음" : dates.map(formatShortDateLabel).join(", ");
+}
+
+function formatPayrollAmount(minutes: number, hourlyWage: number | null | undefined) {
+	if (!hourlyWage) {
+		return "시급 미입력";
+	}
+
+	return `${Math.round((minutes / 60) * hourlyWage).toLocaleString("ko-KR")}원`;
+}
+
+function getPayableWorkMinutes(summary: EmployeeAttendanceSummary) {
+	return summary.completedMinutes + summary.substituteMinutes;
+}
+
+function PayrollSummary({
+	hourlyWage,
+	summary,
+}: {
+	hourlyWage?: number | null;
+	summary: EmployeeAttendanceSummary;
+}) {
+	return (
+		<View style={styles.payrollSummary}>
+			<View style={styles.payrollItem}>
+				<AppText.Xs bold color={AppColors.sub}>
+					예상 금액
+				</AppText.Xs>
+				<AppText.Lg bold color={AppColors.primary}>
+					{formatPayrollAmount(getPayableWorkMinutes(summary), hourlyWage)}
+				</AppText.Lg>
+				<AppText.Xs color={AppColors.sub}>출근 및 대타 처리된 근무 시간 기준</AppText.Xs>
+			</View>
+			<View style={styles.payrollItem}>
+				<AppText.Xs bold color={AppColors.sub}>
+					예정 금액
+				</AppText.Xs>
+				<AppText.Lg bold>
+					{formatPayrollAmount(summary.contractedMinutes, hourlyWage)}
+				</AppText.Lg>
+				<AppText.Xs color={AppColors.sub}>이번 달 풀출근 예정 기준</AppText.Xs>
+			</View>
+		</View>
+	);
 }
 
 function DateHistoryRow({ color = AppColors.text, dates, label }: { color?: string; dates: string[]; label: string }) {
@@ -63,7 +107,12 @@ function StatisticsFallback({ error = false }: { error?: boolean }) {
 	);
 }
 
-export function EmployeeAttendanceStatisticsView({ employeeId, monthKey, onChangeMonth }: EmployeeAttendanceStatisticsViewProps) {
+export function EmployeeAttendanceStatisticsView({
+	employeeId,
+	monthKey,
+	onChangeMonth,
+	showOwnerPayroll = false,
+}: EmployeeAttendanceStatisticsViewProps) {
 	const employees = useAttendanceEmployees();
 	const todayKey = useKoreaToday();
 	const currentMonth = useMemo(() => getCalendarMonth(todayKey), [todayKey]);
@@ -214,6 +263,7 @@ export function EmployeeAttendanceStatisticsView({ employeeId, monthKey, onChang
 				) : visibleState.status === "ready" ? (
 					<>
 						<AttendanceSummaryMetrics attendanceRateLabel={isCurrentMonth ? "오늘까지 출근률" : "월 출근률"} summary={visibleState.summary} />
+						{showOwnerPayroll ? <PayrollSummary hourlyWage={employee?.hourlyWage} summary={visibleState.summary} /> : null}
 
 						<View style={styles.dateHistory}>
 							<AppText.Base bold>근무 날짜</AppText.Base>
@@ -326,6 +376,21 @@ const styles = StyleSheet.create({
 	},
 	titleArea: {
 		gap: 2,
+	},
+	payrollSummary: {
+		flexDirection: "row",
+		gap: AppSpacing.sm,
+	},
+	payrollItem: {
+		flex: 1,
+		minHeight: 96,
+		justifyContent: "center",
+		gap: AppSpacing.xs,
+		borderWidth: 1,
+		borderColor: "rgba(0, 75, 147, 0.18)",
+		borderRadius: 4,
+		backgroundColor: "#F8FBFF",
+		padding: AppSpacing.md,
 	},
 	loading: {
 		minHeight: 240,

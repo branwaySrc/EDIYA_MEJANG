@@ -80,6 +80,8 @@ const searchPlaceholders: Record<LogSearchMode, string> = {
 	name: "직원 이름 검색",
 };
 
+const logPageSize = 30;
+
 function getDatePart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes) {
 	return parts.find(part => part.type === type)?.value ?? "";
 }
@@ -133,9 +135,13 @@ function createLogItem(
 		id: log.id,
 		createdDate: formatLogDate(log.createdAt),
 		createdLabel: formatLogDateTime(log.createdAt),
-		employeeName: employee?.name ?? "알 수 없는 직원",
-		position: scheduledEmployee?.shiftGroup ?? "미정",
-		scheduledEmployeeName: scheduledEmployee?.name ?? "",
+		employeeName:
+			log.temporaryWorkerName ??
+			attendance?.temporaryWorkerName ??
+			employee?.name ??
+			"알 수 없는 직원",
+		position: attendance?.shiftGroup ?? scheduledEmployee?.shiftGroup ?? "미정",
+		scheduledEmployeeName: attendance?.isVacantSlot ? "비어있음" : scheduledEmployee?.name ?? "",
 		scheduledEnd: attendance?.scheduledEnd ?? "",
 		scheduledStart: attendance?.scheduledStart ?? "",
 		workDate: attendance?.workDate ?? "",
@@ -158,7 +164,9 @@ const AttendanceLogRow = memo(function AttendanceLogRow({ item }: { item: Attend
 	const hasSchedule = Boolean(item.workDate && item.scheduledStart && item.scheduledEnd);
 	const scheduleText = hasSchedule
 		? `${item.workDate} ${item.scheduledStart}-${item.scheduledEnd} / `
-		: "근무 정보 없음 / ";
+		: item.workDate
+			? `${item.workDate} / `
+			: "근무 정보 없음 / ";
 
 	return (
 		<View style={styles.logEntry}>
@@ -192,9 +200,13 @@ export function AttendanceLogView() {
 	const employees = useAttendanceEmployees();
 	const [keyword, setKeyword] = useState("");
 	const [searchMode, setSearchMode] = useState<LogSearchMode>("name");
+	const [visibleLogCount, setVisibleLogCount] = useState(logPageSize);
 	const deferredKeyword = useDeferredValue(keyword);
 	const records = useAttendanceStore(state => state.records);
 	const storeLogs = useAttendanceStore(state => state.logs);
+	const hasMoreRemoteLogs = useAttendanceStore(state => state.hasMoreRemoteLogs);
+	const loadMoreLogs = useAttendanceStore(state => state.loadMoreLogs);
+	const logsLoadingMore = useAttendanceStore(state => state.logsLoadingMore);
 	const employeesById = useMemo(
 		() => new Map(employees.map(employee => [employee.id, employee])),
 		[employees],
@@ -248,10 +260,26 @@ export function AttendanceLogView() {
 		);
 	}, [deferredKeyword, logItems, searchMode]);
 	const isFiltering = searchMode === "substitute" || keyword.trim().length > 0;
+	const visibleLogItems = useMemo(
+		() => filteredLogItems.slice(0, visibleLogCount),
+		[filteredLogItems, visibleLogCount],
+	);
 	const handleSearchModeChange = useCallback((nextMode: LogSearchMode) => {
 		setSearchMode(nextMode);
 		setKeyword("");
+		setVisibleLogCount(logPageSize);
 	}, []);
+	const handleKeywordChange = useCallback((value: string) => {
+		setKeyword(value);
+		setVisibleLogCount(logPageSize);
+	}, []);
+	const handleEndReached = useCallback(() => {
+		setVisibleLogCount(current => current + logPageSize);
+
+		if (!isFiltering && hasMoreRemoteLogs && !logsLoadingMore) {
+			void loadMoreLogs();
+		}
+	}, [hasMoreRemoteLogs, isFiltering, loadMoreLogs, logsLoadingMore]);
 	const renderLogItem = useCallback(
 		({ item }: ListRenderItemInfo<AttendanceLogItem>) => <AttendanceLogRow item={item} />,
 		[],
@@ -260,8 +288,8 @@ export function AttendanceLogView() {
 	return (
 		<FlatList
 			contentContainerStyle={styles.listContent}
-			data={filteredLogItems}
-			initialNumToRender={12}
+			data={visibleLogItems}
+			initialNumToRender={logPageSize}
 			keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
 			keyboardShouldPersistTaps="handled"
 			keyExtractor={item => item.id}
@@ -297,7 +325,7 @@ export function AttendanceLogView() {
 					<SearchBox
 						accessibilityLabel={`${searchModes.find(mode => mode.id === searchMode)?.label ?? ""} 검색`}
 						clearButtonMode="while-editing"
-						onChangeText={setKeyword}
+						onChangeText={handleKeywordChange}
 						onSubmit={Keyboard.dismiss}
 						placeholder={searchPlaceholders[searchMode]}
 						showSubmitButton={false}
@@ -312,7 +340,20 @@ export function AttendanceLogView() {
 					</View>
 				</View>
 			}
+			ListFooterComponent={
+				logsLoadingMore ? (
+					<View style={styles.footerState}>
+						<AppText.Sm color={AppColors.sub}>로그를 불러오고 있습니다...</AppText.Sm>
+					</View>
+				) : filteredLogItems.length > visibleLogItems.length || (!isFiltering && hasMoreRemoteLogs) ? (
+					<View style={styles.footerState}>
+						<AppText.Sm color={AppColors.sub}>아래로 스크롤하면 로그를 더 불러옵니다.</AppText.Sm>
+					</View>
+				) : null
+			}
 			maxToRenderPerBatch={10}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.35}
 			removeClippedSubviews={Platform.OS !== "web"}
 			renderItem={renderLogItem}
 			showsVerticalScrollIndicator={false}
@@ -400,5 +441,12 @@ const styles = StyleSheet.create({
 		borderTopColor: logColors.border,
 		backgroundColor: logColors.surface,
 		paddingHorizontal: AppSpacing.md,
+	},
+	footerState: {
+		minHeight: 56,
+		alignItems: "center",
+		justifyContent: "center",
+		borderTopWidth: 1,
+		borderTopColor: logColors.border,
 	},
 });

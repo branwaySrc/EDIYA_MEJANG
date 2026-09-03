@@ -4,8 +4,8 @@
 -- area is gated only by the app's local passcode for now, these source tables
 -- must be reachable by anon for Sajang list/edit/delete flows to work.
 --
--- Employee-facing recipe/search screens still read local SQLite content packs
--- in app code. This SQL only opens the Supabase source editing path.
+-- Employee-facing recipe/search screens read the versioned device file cache.
+-- This SQL only opens the Supabase source editing path.
 
 alter table public.recipes enable row level security;
 alter table public.recipe_details enable row level security;

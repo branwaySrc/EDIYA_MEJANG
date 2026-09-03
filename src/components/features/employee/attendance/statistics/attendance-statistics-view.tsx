@@ -1,20 +1,57 @@
 import { type Href, useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
-import { ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
 import { AppPressable } from "@/components/base/app-pressable";
 import { AppText } from "@/components/base/app-text";
 import { formatAttendanceRate, formatMinutesAsHours, shiftColors } from "@/components/features/employee/attendance/attendance-ui";
+import { OwnerMonthlyWorkSummary } from "@/components/features/employee/attendance/owner-monthly-work-summary";
 import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
 import { useKoreaToday } from "@/components/features/employee/attendance/use-korea-today";
 import { AppColors, AppSpacing } from "@/constants/theme";
-import type { EmployeeAttendanceSummary } from "@/database/employee/attendance.type";
+import { fetchAttendanceMonthArchive } from "@/database/employee/attendance-history";
+import type { AttendanceMonthSummary, AttendanceScheduleEntry, EmployeeAttendanceSummary } from "@/database/employee/attendance.type";
 import { buildAttendanceMonthSummary, buildAttendanceSchedule } from "@/lib/attendance-schedule";
-import { formatCalendarMonthKey, formatShortDateLabel, getCalendarMonth } from "@/lib/korea-date";
+import {
+	addCalendarMonths,
+	formatCalendarMonthKey,
+	formatCalendarMonthTitle,
+	formatShortDateLabel,
+	getCalendarMonth,
+	getCalendarMonthLastDateKey,
+	parseCalendarMonthKey,
+} from "@/lib/korea-date";
 import { useAttendanceStore } from "@/store/attendance-store";
 
-function EmployeeStatisticsRow({ onPressDetails, summary }: { onPressDetails: () => void; summary: EmployeeAttendanceSummary }) {
+type MonthSummaryState =
+	| { monthKey: string; status: "loading" }
+	| { monthKey: string; status: "empty" | "error" }
+	| { monthKey: string; schedule: AttendanceScheduleEntry[]; status: "ready"; summary: AttendanceMonthSummary };
+
+function formatPayrollAmount(minutes: number, hourlyWage: number | null | undefined) {
+	if (!hourlyWage) {
+		return "시급 미입력";
+	}
+
+	return `${Math.round((minutes / 60) * hourlyWage).toLocaleString("ko-KR")}원`;
+}
+
+function getPayableWorkMinutes(summary: EmployeeAttendanceSummary) {
+	return summary.completedMinutes + summary.substituteMinutes;
+}
+
+function EmployeeStatisticsRow({
+	hourlyWage,
+	onPressDetails,
+	showOwnerPayroll,
+	summary,
+}: {
+	hourlyWage?: number | null;
+	onPressDetails: () => void;
+	showOwnerPayroll: boolean;
+	summary: EmployeeAttendanceSummary;
+}) {
 	const progressStyle: ViewStyle = {
 		width: `${Math.min(100, Math.max(0, summary.attendanceRate * 100))}%`,
 		backgroundColor: shiftColors[summary.shiftGroup],
@@ -67,6 +104,25 @@ function EmployeeStatisticsRow({ onPressDetails, summary }: { onPressDetails: ()
 				</AppText.Xs>
 			</View>
 
+			{showOwnerPayroll ? (
+				<View style={styles.payrollSummary}>
+					<View style={styles.payrollItem}>
+						<AppText.Xs bold color={AppColors.sub}>
+							예상 금액
+						</AppText.Xs>
+						<AppText.Base bold color={AppColors.primary}>
+							{formatPayrollAmount(getPayableWorkMinutes(summary), hourlyWage)}
+						</AppText.Base>
+					</View>
+					<View style={styles.payrollItem}>
+						<AppText.Xs bold color={AppColors.sub}>
+							예정 금액
+						</AppText.Xs>
+						<AppText.Base bold>{formatPayrollAmount(summary.contractedMinutes, hourlyWage)}</AppText.Base>
+					</View>
+				</View>
+			) : null}
+
 			<View style={styles.detailsActionRow}>
 				<AppPressable
 					accessibilityLabel={`${summary.employeeName} 근무 통계 자세히 보기`}
@@ -86,12 +142,20 @@ function EmployeeStatisticsRow({ onPressDetails, summary }: { onPressDetails: ()
 	);
 }
 
-export function AttendanceStatisticsView() {
+export type AttendanceStatisticsViewProps = {
+	showOwnerMonthlySummary?: boolean;
+	showOwnerPayroll?: boolean;
+};
+
+export function AttendanceStatisticsView({ showOwnerMonthlySummary = false, showOwnerPayroll = false }: AttendanceStatisticsViewProps) {
 	const router = useRouter();
 	const employees = useAttendanceEmployees();
 	const todayKey = useKoreaToday();
 	const currentMonth = useMemo(() => getCalendarMonth(todayKey), [todayKey]);
 	const currentMonthKey = useMemo(() => formatCalendarMonthKey(currentMonth), [currentMonth]);
+	const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
+	const selectedMonth = useMemo(() => parseCalendarMonthKey(selectedMonthKey) ?? currentMonth, [currentMonth, selectedMonthKey]);
+	const isCurrentMonth = selectedMonthKey === currentMonthKey;
 	const records = useAttendanceStore(state => state.records);
 	const schedule = useMemo(
 		() =>
@@ -103,38 +167,160 @@ export function AttendanceStatisticsView() {
 			}),
 		[currentMonth, employees, records, todayKey],
 	);
-	const summary = useMemo(
-		() => buildAttendanceMonthSummary(schedule, employees, todayKey),
-		[employees, schedule, todayKey],
+	const summary = useMemo(() => buildAttendanceMonthSummary(schedule, employees, todayKey), [employees, schedule, todayKey]);
+	const employeeById = useMemo(() => new Map(employees.map(employee => [employee.id, employee])), [employees]);
+	const [archiveState, setArchiveState] = useState<MonthSummaryState>({
+		monthKey: selectedMonthKey,
+		status: "loading",
+	});
+
+	useEffect(() => {
+		if (isCurrentMonth) {
+			return;
+		}
+
+		let active = true;
+
+		fetchAttendanceMonthArchive(selectedMonthKey)
+			.then(archive => {
+				if (!active) {
+					return;
+				}
+
+				if (!archive || archive.coverage.status !== "closed") {
+					setArchiveState({ monthKey: selectedMonthKey, status: "empty" });
+					return;
+				}
+
+				const archiveSchedule = buildAttendanceSchedule({
+					...selectedMonth,
+					employees,
+					records: archive.records,
+					todayKey: getCalendarMonthLastDateKey(selectedMonth),
+				});
+				const archiveSummary = buildAttendanceMonthSummary(archiveSchedule, employees, getCalendarMonthLastDateKey(selectedMonth));
+
+				setArchiveState({ monthKey: selectedMonthKey, schedule: archiveSchedule, status: "ready", summary: archiveSummary });
+			})
+			.catch(() => {
+				if (active) {
+					setArchiveState({ monthKey: selectedMonthKey, status: "error" });
+				}
+			});
+
+		return () => {
+			active = false;
+		};
+	}, [employees, isCurrentMonth, selectedMonth, selectedMonthKey]);
+
+	const visibleState: MonthSummaryState = isCurrentMonth
+		? { monthKey: selectedMonthKey, schedule, status: "ready", summary }
+		: archiveState.monthKey === selectedMonthKey
+			? archiveState
+			: { monthKey: selectedMonthKey, status: "loading" };
+	const visibleSummary = visibleState.status === "ready" ? visibleState.summary : null;
+	const visibleSummaryTodayKey = isCurrentMonth ? todayKey : getCalendarMonthLastDateKey(selectedMonth);
+	const canMoveNext = selectedMonthKey < currentMonthKey;
+	const handleChangeMonth = useCallback(
+		(amount: number) => {
+			const nextMonth = addCalendarMonths(selectedMonth, amount);
+			const nextMonthKey = formatCalendarMonthKey(nextMonth);
+
+			if (nextMonthKey <= currentMonthKey) {
+				setSelectedMonthKey(nextMonthKey);
+			}
+		},
+		[currentMonthKey, selectedMonth],
 	);
 	const handlePressDetails = useCallback(
 		(employeeId: string) => {
+			const pathname = showOwnerPayroll ? "/sajang/attendance/statistics/[employeeId]" : "/attendance/statistics/[employeeId]";
+
 			router.push({
-				pathname: "/attendance/statistics/[employeeId]",
+				pathname,
 				params: {
 					employeeId,
-					month: currentMonthKey,
+					month: selectedMonthKey,
 				},
 			} as Href);
 		},
-		[currentMonthKey, router],
+		[router, selectedMonthKey, showOwnerPayroll],
 	);
 
 	return (
 		<ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={styles.container}>
 			<View style={styles.content}>
+				<View style={styles.monthToolbar}>
+					<View style={styles.monthControls}>
+						<AppIcon.Base
+							accessibilityLabel="이전 달 통계"
+							buttonStyle={styles.monthIconButton}
+							name="chevron-back"
+							onPress={() => handleChangeMonth(-1)}
+						/>
+						<AppText.Base bold style={styles.monthTitle}>
+							{formatCalendarMonthTitle(selectedMonth)}
+						</AppText.Base>
+						<AppIcon.Base
+							accessibilityLabel="다음 달 통계"
+							buttonStyle={styles.monthIconButton}
+							color={canMoveNext ? AppColors.text : AppColors.placeholder}
+							disabled={!canMoveNext}
+							name="chevron-forward"
+							onPress={() => handleChangeMonth(1)}
+						/>
+					</View>
+
+					{isCurrentMonth ? (
+						<View style={styles.currentButtonPlaceholder} />
+					) : (
+						<AppPressable
+							accessibilityRole="button"
+							border
+							onPress={() => setSelectedMonthKey(currentMonthKey)}
+							radius="base"
+							style={styles.currentButton}
+						>
+							<AppText.Xs bold color={AppColors.primary}>
+								이번달로 이동
+							</AppText.Xs>
+						</AppPressable>
+					)}
+				</View>
+
+				{showOwnerMonthlySummary && visibleState.status === "ready" ? (
+					<View style={styles.monthlySummaryFullBleed}>
+						<OwnerMonthlyWorkSummary employees={employees} entries={visibleState.schedule} todayKey={visibleSummaryTodayKey} />
+					</View>
+				) : null}
+
 				<View style={styles.employeeSection}>
 					<View style={styles.sectionHeader}>
 						<AppText.Base bold>직원별 현황</AppText.Base>
-						<AppText.Xs color={AppColors.sub}>{summary.employeeSummaries.length}명</AppText.Xs>
+						<AppText.Base color={AppColors.sub}>{visibleSummary?.employeeSummaries.length ?? 0}명</AppText.Base>
 					</View>
-					{summary.employeeSummaries.map(employeeSummary => (
-						<EmployeeStatisticsRow
-							key={employeeSummary.employeeId}
-							onPressDetails={() => handlePressDetails(employeeSummary.employeeId)}
-							summary={employeeSummary}
-						/>
-					))}
+					{visibleState.status === "loading" ? (
+						<View style={styles.loading}>
+							<ActivityIndicator color={AppColors.primary} />
+						</View>
+					) : visibleState.status === "ready" && visibleState.summary.employeeSummaries.length > 0 ? (
+						visibleState.summary.employeeSummaries.map(employeeSummary => (
+							<EmployeeStatisticsRow
+								key={employeeSummary.employeeId}
+								hourlyWage={employeeById.get(employeeSummary.employeeId)?.hourlyWage}
+								onPressDetails={() => handlePressDetails(employeeSummary.employeeId)}
+								showOwnerPayroll={showOwnerPayroll}
+								summary={employeeSummary}
+							/>
+						))
+					) : (
+						<View style={styles.emptyState}>
+							<AppText.Base bold>선택한 달의 근태 통계가 없습니다.</AppText.Base>
+							<AppText.Sm color={AppColors.sub}>
+								{visibleState.status === "error" ? "근태 기록을 불러오지 못했습니다." : "마감된 근태 기록이 없거나 예정 근무가 없습니다."}
+							</AppText.Sm>
+						</View>
+					)}
 				</View>
 			</View>
 		</ScrollView>
@@ -156,8 +342,45 @@ const styles = StyleSheet.create({
 	content: {
 		width: "100%",
 		maxWidth: 960,
+		gap: AppSpacing.md,
 		backgroundColor: AppColors.background,
 		padding: AppSpacing.md,
+	},
+	monthToolbar: {
+		minHeight: 44,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: AppSpacing.sm,
+	},
+	monthControls: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: AppSpacing.xs,
+	},
+	monthIconButton: {
+		width: 36,
+		height: 36,
+	},
+	monthTitle: {
+		minWidth: 92,
+		textAlign: "center",
+		letterSpacing: 0,
+	},
+	currentButtonPlaceholder: {
+		width: 58,
+	},
+	currentButton: {
+		minWidth: 58,
+		minHeight: 34,
+		alignItems: "center",
+		justifyContent: "center",
+		borderColor: "rgba(0, 75, 147, 0.34)",
+		backgroundColor: AppColors.background,
+		paddingHorizontal: AppSpacing.sm,
+	},
+	monthlySummaryFullBleed: {
+		marginHorizontal: -AppSpacing.md,
 	},
 	employeeSection: {
 		width: "100%",
@@ -222,6 +445,21 @@ const styles = StyleSheet.create({
 	dateSummary: {
 		gap: 2,
 	},
+	payrollSummary: {
+		flexDirection: "row",
+		gap: AppSpacing.sm,
+	},
+	payrollItem: {
+		flex: 1,
+		minHeight: 64,
+		justifyContent: "center",
+		gap: AppSpacing.xs,
+		borderWidth: 1,
+		borderColor: "rgba(0, 75, 147, 0.18)",
+		borderRadius: 4,
+		backgroundColor: "#F8FBFF",
+		paddingHorizontal: AppSpacing.sm,
+	},
 	detailsActionRow: {
 		flexDirection: "row",
 		justifyContent: "flex-end",
@@ -237,5 +475,17 @@ const styles = StyleSheet.create({
 		backgroundColor: AppColors.background,
 		paddingLeft: AppSpacing.md,
 		paddingRight: AppSpacing.xs,
+	},
+	loading: {
+		minHeight: 220,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	emptyState: {
+		minHeight: 220,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: AppSpacing.xs,
+		paddingHorizontal: AppSpacing.md,
 	},
 });

@@ -23,10 +23,12 @@ function createSampleEmployeeRecord(
 		birth_date: null,
 		created_at: sampleCreatedAt,
 		email: null,
+		employment_status: "active",
 		hourly_wage: null,
 		is_owner: false,
 		phone: "010-0000-0000",
 		phone_public: false,
+		terminated_at: null,
 		updated_at: sampleCreatedAt,
 		workplace_id: "wolpi",
 		workplace_name: "이디야 월피동점",
@@ -129,6 +131,7 @@ export function toEmployee(record: EmployeeRecord): Employee {
 		birthDate: record.birth_date ?? "",
 		createdAt: record.created_at,
 		email: record.email ?? "",
+		employmentStatus: record.employment_status ?? "active",
 		hourlyWage: record.hourly_wage,
 		id: record.id,
 		joinedAt: record.joined_at,
@@ -137,6 +140,7 @@ export function toEmployee(record: EmployeeRecord): Employee {
 		phone: record.phone,
 		phonePublic: record.phone_public,
 		shiftGroup: record.shift_group,
+		terminatedAt: record.terminated_at ?? null,
 		updatedAt: record.updated_at,
 		workDays: [...record.work_days],
 		workEndMinutes: record.work_end_minutes,
@@ -160,6 +164,7 @@ export function toEmployeeRecord(employee: Employee): EmployeeRecord {
 		birth_date: employee.birthDate || null,
 		created_at: employee.createdAt,
 		email: employee.email || null,
+		employment_status: employee.employmentStatus,
 		hourly_wage: employee.hourlyWage,
 		id: employee.id,
 		is_owner: employee.owner ?? false,
@@ -168,6 +173,7 @@ export function toEmployeeRecord(employee: Employee): EmployeeRecord {
 		phone: employee.phone,
 		phone_public: employee.phonePublic,
 		shift_group: employee.shiftGroup,
+		terminated_at: employee.terminatedAt,
 		updated_at: employee.updatedAt,
 		work_days: [...employee.workDays],
 		work_end_minutes: employee.workEndMinutes,
@@ -208,7 +214,7 @@ export const sampleEmployees = sampleEmployeeRecords.slice(1).map(toEmployee);
 export function buildEmployeeDirectory(records: EmployeeRecord[] = getEmployeeRecordsSnapshot()): EmployeeDirectory {
 	const employees = records.map(toEmployee);
 	const owner = employees.find(employee => employee.owner) ?? sampleOwner;
-	const staff = employees.filter(employee => !employee.owner);
+	const staff = employees.filter(employee => !employee.owner && employee.employmentStatus === "active");
 
 	return {
 		owner,

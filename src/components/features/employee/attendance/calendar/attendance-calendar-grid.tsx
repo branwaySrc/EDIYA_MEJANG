@@ -39,7 +39,7 @@ function getStatusTextColor(status: AttendanceStatus) {
 }
 
 function getPrimaryWorkMinutes(entry: AttendanceScheduleEntry) {
-	if (entry.substituteEmployeeId) {
+	if (entry.substituteEmployeeId || entry.temporaryWorkerId) {
 		return 0;
 	}
 
@@ -77,7 +77,8 @@ function CalendarDayCell({
 	const outsideMonth = !day.inCurrentMonth;
 	const highlightedToday = today && !outsideMonth;
 	const disabled = outsideMonth;
-	const visibleEntries = outsideMonth && !showOutsideMonthDates ? [] : entries;
+	const visibleEntries = (outsideMonth && !showOutsideMonthDates ? [] : entries)
+		.filter(entry => !entry.isVacantSlot || Boolean(entry.substituteEmployeeId || entry.temporaryWorkerId));
 	const { month } = parseDateKey(day.dateKey);
 	const dateLabel = mode === "period" && outsideMonth ? `${month}/${day.day}` : day.day;
 	const accessibilitySummary =
@@ -121,7 +122,21 @@ function CalendarDayCell({
 
 			<View style={[styles.badgeList, outsideMonth && styles.readOnlyBadgeList]}>
 				{visibleEntries.map(entry => {
-					const hasSubstitute = Boolean(entry.substituteEmployeeId && entry.substituteEmployeeName);
+					const substituteName = entry.temporaryWorkerName ?? entry.substituteEmployeeName;
+					const hasSubstitute = Boolean((entry.substituteEmployeeId || entry.temporaryWorkerId) && substituteName);
+
+					if (entry.isVacantSlot) {
+						return (
+							<View key={entry.id} style={[styles.attendanceBadge, styles.substituteNameBadge]}>
+								<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
+									{formatEmployeeBadgeLabel(
+										substituteName ?? "대타",
+										getSubstituteWorkMinutes(entry),
+									)}
+								</AppText.Xs>
+							</View>
+						);
+					}
 
 					return (
 						<View
@@ -142,7 +157,7 @@ function CalendarDayCell({
 							{hasSubstitute && (
 								<View style={styles.substituteNameBadge}>
 									<AppText.Xs bold color={AppColors.textOnPrimary} numberOfLines={1}>
-										{formatEmployeeBadgeLabel(entry.substituteEmployeeName ?? "", getSubstituteWorkMinutes(entry))}
+										{formatEmployeeBadgeLabel(substituteName ?? "", getSubstituteWorkMinutes(entry))}
 									</AppText.Xs>
 								</View>
 							)}

@@ -14,7 +14,7 @@ export type HiringSignatureImages = {
 
 export type HiringDraft = {
 	address: string;
-	birthDate: string;
+	birthDate: number | null;
 	contractMemo: string;
 	documents: HiringDocumentChecklist;
 	employeeEmail: string;
@@ -92,7 +92,7 @@ export const hiringOwnerName = "김민석";
 
 export const initialHiringDraft: HiringDraft = {
 	employeeName: "",
-	birthDate: "",
+	birthDate: null,
 	phone: "",
 	phonePublic: false,
 	employeeEmail: "",
@@ -119,7 +119,7 @@ export const initialHiringDraft: HiringDraft = {
 };
 
 export function isEmployeeInfoReady(draft: HiringDraft) {
-	return [draft.employeeName, draft.birthDate, draft.phone, draft.employeeEmail, draft.address].every(value => value.trim().length > 0);
+	return Boolean(draft.birthDate) && [draft.employeeName, draft.phone, draft.employeeEmail, draft.address].every(value => value.trim().length > 0);
 }
 
 export function isWorkplaceReady(draft: HiringDraft) {

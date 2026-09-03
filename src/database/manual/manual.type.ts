@@ -10,6 +10,7 @@ export type ManagedContentSection = {
 	id: string;
 	imageAlt?: string;
 	imageSource?: ImageSourcePropType;
+	storagePath?: string;
 	title: string;
 };
 
@@ -30,6 +31,7 @@ export type ManualContentBlock =
 			alt: string;
 			id: string;
 			source: ImageSourcePropType;
+			storagePath?: string;
 			type: "image";
 	  };
 

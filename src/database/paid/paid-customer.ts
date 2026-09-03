@@ -1,5 +1,7 @@
 import type {
 	PaidCustomer,
+	PaidCustomerProfileChange,
+	PaidCustomerProfileChangeRecord,
 	PaidCustomerRecord,
 	PaidLedgerEntry,
 	PaidLedgerEntryRecord,
@@ -9,6 +11,20 @@ import type {
 export const defaultPaidStoreId = "wolpi";
 
 export const samplePaidCustomers: PaidCustomer[] = [];
+
+export function createPaidCustomerId(input: Pick<PaidCustomer, "affiliation" | "name" | "nickname">): string {
+	const baseId = [input.name, input.nickname, input.affiliation].join("-").replace(/\s/g, "-").toLowerCase();
+
+	return `${baseId}-${Date.now()}`;
+}
+
+export function createPaidLedgerEntryId(customerId: string): string {
+	return `${customerId}-${Date.now()}`;
+}
+
+export function createPaidCustomerProfileChangeId(customerId: string): string {
+	return `${customerId}-profile-${Date.now()}`;
+}
 
 export function getPaidLedgerAmountDelta(type: PaidLedgerTransactionType, amount: number): number {
 	if (type === "usage" || type === "refund") {
@@ -52,6 +68,8 @@ export function mapPaidLedgerEntryRecord(record: PaidLedgerEntryRecord): PaidLed
 		balanceAfter: record.balance_after,
 		memo: record.memo ?? undefined,
 		occurredAt: record.occurred_at,
+		receiptStoragePath: record.receipt_storage_path,
+		receiptUploadedAt: record.receipt_uploaded_at,
 		createdAt: record.created_at,
 		createdBy: record.created_by,
 		idempotencyKey: record.idempotency_key,
@@ -59,7 +77,35 @@ export function mapPaidLedgerEntryRecord(record: PaidLedgerEntryRecord): PaidLed
 	};
 }
 
-export function mapPaidCustomerRecord(record: PaidCustomerRecord, ledger: PaidLedgerEntryRecord[] = []): PaidCustomer {
+export function mapPaidCustomerProfileChangeRecord(record: PaidCustomerProfileChangeRecord): PaidCustomerProfileChange {
+	return {
+		id: record.id,
+		storeId: record.store_id,
+		customerId: record.customer_id,
+		before: {
+			name: record.before_name,
+			nickname: record.before_nickname,
+			affiliation: record.before_affiliation,
+			phone: record.before_phone,
+		},
+		after: {
+			name: record.after_name,
+			nickname: record.after_nickname,
+			affiliation: record.after_affiliation,
+			phone: record.after_phone,
+		},
+		changedFields: record.changed_fields,
+		changedBy: record.changed_by,
+		occurredAt: record.occurred_at,
+		createdAt: record.created_at,
+	};
+}
+
+export function mapPaidCustomerRecord(
+	record: PaidCustomerRecord,
+	ledger: PaidLedgerEntryRecord[] = [],
+	profileChanges: PaidCustomerProfileChangeRecord[] = [],
+): PaidCustomer {
 	return {
 		id: record.id,
 		storeId: record.store_id,
@@ -77,5 +123,6 @@ export function mapPaidCustomerRecord(record: PaidCustomerRecord, ledger: PaidLe
 		updatedAt: record.updated_at,
 		archivedAt: record.archived_at,
 		ledger: ledger.map(mapPaidLedgerEntryRecord),
+		profileChanges: profileChanges.map(mapPaidCustomerProfileChangeRecord),
 	};
 }

@@ -83,25 +83,28 @@ type HiringContractStore = {
 	setResult: (result: HiringContractResult | null) => void;
 };
 
-type LegacyHiringDraft = Partial<HiringDraft> & {
+type LegacyHiringDraft = Partial<Omit<HiringDraft, "birthDate">> & {
+	birthDate?: number | string | null;
 	workTime?: string;
 };
 
-type PersistedHiringContractState = Partial<Omit<HiringContractStore, "draft">> & {
+type LegacyHiringContractRecord = Omit<HiringContractRecord, "draft"> & {
 	draft?: LegacyHiringDraft;
 };
 
-function parseLegacyWorkTime(workTime?: string) {
-	const match = workTime?.match(/(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/);
+type PersistedHiringContractState = Partial<Omit<HiringContractStore, "draft">> & {
+	contracts?: LegacyHiringContractRecord[];
+	draft?: LegacyHiringDraft;
+};
 
-	if (!match) {
-		return { end: null, start: null };
+function normalizeBirthDate(value: number | string | null | undefined) {
+	if (typeof value === "number") {
+		return Number.isFinite(value) && value > 0 ? value : null;
 	}
 
-	return {
-		end: Number(match[3]) * 60 + Number(match[4]),
-		start: Number(match[1]) * 60 + Number(match[2]),
-	};
+	const digits = value?.replace(/\D/g, "").slice(0, 8) ?? "";
+
+	return digits ? Number(digits) : null;
 }
 
 export const useHiringContractStore = create<HiringContractStore>()(
@@ -156,33 +159,31 @@ export const useHiringContractStore = create<HiringContractStore>()(
 		{
 			migrate: persistedState => {
 				const state = persistedState as PersistedHiringContractState;
-				const legacyTime = parseLegacyWorkTime(state.draft?.workTime);
 
 				return {
 					...state,
-					contracts: state.contracts ?? [],
-					draft: {
-						...initialHiringDraft,
-						...state.draft,
-						documents: {
-							...initialHiringDraft.documents,
-							...state.draft?.documents,
+					contracts: (state.contracts ?? []).map(contract => ({
+						...contract,
+						draft: {
+							...initialHiringDraft,
+							...contract.draft,
+							birthDate: normalizeBirthDate(contract.draft?.birthDate),
+							documents: {
+								...initialHiringDraft.documents,
+								...contract.draft?.documents,
+							},
 						},
-						phonePublic: state.draft?.phonePublic ?? false,
-						workEndMinutes: state.draft?.workEndMinutes ?? legacyTime.end,
-						workStartMinutes: state.draft?.workStartMinutes ?? legacyTime.start,
-					},
-					result: state.result ?? null,
+					})),
+					draft: initialHiringDraft,
+					result: null,
 				} satisfies Partial<HiringContractStore>;
 			},
 			name: "ediya-mejang:hiring-contracts",
 			storage: createJSONStorage(() => fileSystemStateStorage),
 			partialize: state => ({
 				contracts: state.contracts,
-				draft: state.draft,
-				result: state.result,
 			}),
-			version: 2,
+			version: 4,
 		},
 	),
 );

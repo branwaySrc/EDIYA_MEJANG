@@ -21,19 +21,27 @@ export function HiringRegisterForm() {
 			},
 		[setField],
 	);
+	const changeBirthDate = useCallback(
+		(value: string) => {
+			const digits = value.replace(/\D/g, "").slice(0, 8);
+
+			setField("birthDate", digits ? Number(digits) : null);
+		},
+		[setField],
+	);
 
 	return (
 		<HiringStepFrame step={1} title="신규 직원 정보 입력" subtitle="계약서와 직원 목록에 연결될 기본 정보를 입력합니다.">
 			<View style={styles.section}>
 				<HiringField label="직원 이름" value={draft.employeeName} onChangeText={createChangeHandler("employeeName")} placeholder="예: 김민지" />
-				<HiringField label="직원 생년월일" value={draft.birthDate} onChangeText={createChangeHandler("birthDate")} placeholder="YYYY-MM-DD" />
+				<HiringField keyboardType="number-pad" label="직원 생년월일" maxLength={8} value={draft.birthDate?.toString() ?? ""} onChangeText={changeBirthDate} placeholder="예: 19990101" />
 				<HiringField keyboardType="phone-pad" label="연락처" value={draft.phone} onChangeText={createChangeHandler("phone")} placeholder="010-0000-0000" />
 				<View style={styles.visibilityRow}>
 					<View style={styles.visibilityText}>
-						<AppText.Sm bold>연락처 공개</AppText.Sm>
-						<AppText.Xs color={AppColors.sub}>
+						<AppText.Base bold>연락처 공개</AppText.Base>
+						<AppText.Sm color={AppColors.sub}>
 							직원 정보 카드에서 전화번호를 표시합니다.
-						</AppText.Xs>
+						</AppText.Sm>
 					</View>
 					<Switch
 						accessibilityLabel="연락처 공개 여부"

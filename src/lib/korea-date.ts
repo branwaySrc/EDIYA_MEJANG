@@ -53,6 +53,19 @@ export function getKoreaTodayKey(now: Date = new Date()) {
 
 
 
+export function getKoreaDateKey(dateValue: string | Date) {
+	const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+
+	if (Number.isNaN(date.getTime())) {
+		return null;
+	}
+
+	const parts = koreaDateFormatter.formatToParts(date);
+	return `${getDatePart(parts, "year")}-${getDatePart(parts, "month")}-${getDatePart(parts, "day")}`;
+}
+
+
+
 export function getMillisecondsUntilNextKoreaDay(now: Date = new Date()) {
 	const koreaTimestamp = now.getTime() + koreaUtcOffsetMilliseconds;
 	const koreaDate = new Date(koreaTimestamp);

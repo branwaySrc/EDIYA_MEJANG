@@ -1,5 +1,5 @@
 import * as Clipboard from "expo-clipboard";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Switch, View } from "react-native";
 
 import { AppBadge } from "@/components/base/app-badge";
@@ -16,11 +16,14 @@ import { employeeDocumentLabels } from "@/database/employee/employee-document";
 import type { EmployeeDocumentType, EmployeeRecord, EmployeeShiftGroup, EmployeeWeekday } from "@/database/employee/employee.type";
 import { hiringWorkplaces, type HiringWorkplaceId } from "@/database/sajang/workplace";
 import { deleteEmployeeDocumentFileAsync, pickEmployeeDocumentAsync } from "@/lib/employee-document-storage";
+import { getKoreaTodayKey } from "@/lib/korea-date";
 import { useAppToastStore } from "@/store/app-toast-store";
 import { useEmployeeManagementStore } from "@/store/employee-management-store";
 import { useHiringContractStore } from "@/store/hiring-contract-store";
 
 type PendingDelete = { id: string; kind: "contract" } | { id: string; kind: "document"; localUri: string };
+
+type ConfirmAction = "delete-document" | "terminate-employee";
 
 type DocumentDisplayItem = {
 	id: string;
@@ -31,6 +34,39 @@ type DocumentDisplayItem = {
 
 const weekdays: EmployeeWeekday[] = ["월", "화", "수", "목", "금", "토", "일"];
 const managedDocumentTypes: EmployeeDocumentType[] = ["contract", "health_certificate", "bankbook_copy", "id_card_copy", "other"];
+
+function formatDateInput(value: string) {
+	const digits = value.replace(/\D/g, "").slice(0, 8);
+
+	if (digits.length <= 4) {
+		return digits;
+	}
+
+	if (digits.length <= 6) {
+		return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+	}
+
+	return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+function isValidDateKey(value: string) {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+	if (!match) {
+		return false;
+	}
+
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const date = new Date(Date.UTC(year, month - 1, day));
+
+	return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function toKoreaDateStartIso(dateKey: string) {
+	return new Date(`${dateKey}T00:00:00+09:00`).toISOString();
+}
 
 function cloneRecord(record: EmployeeRecord) {
 	return {
@@ -138,6 +174,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 	const updateEmployeeRecord = useEmployeeManagementStore(state => state.updateEmployeeRecord);
 	const upsertDocumentRecord = useEmployeeManagementStore(state => state.upsertDocumentRecord);
 	const removeDocumentRecord = useEmployeeManagementStore(state => state.removeDocumentRecord);
+	const syncErrorMessage = useEmployeeManagementStore(state => state.syncErrorMessage);
 	const contracts = useHiringContractStore(state => state.contracts);
 	const removeContract = useHiringContractStore(state => state.removeContract);
 	const showToast = useAppToastStore(state => state.showToast);
@@ -149,6 +186,14 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 	const [bankDraft, setBankDraft] = useState<{ accountNumber: string; bankName: string } | null>(null);
 	const [busyDocumentType, setBusyDocumentType] = useState<EmployeeDocumentType | null>(null);
 	const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+	const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+	const [terminationDate, setTerminationDate] = useState(() => getKoreaTodayKey());
+
+	useEffect(() => {
+		if (syncErrorMessage) {
+			showToast(syncErrorMessage);
+		}
+	}, [showToast, syncErrorMessage]);
 
 	if (!record || !employee) {
 		return (
@@ -164,6 +209,8 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 	const bankEditing = bankDraft !== null || !record.bank_account_number;
 	const accountNumber = bankDraft?.accountNumber ?? record.bank_account_number ?? "";
 	const bankName = bankDraft?.bankName ?? record.bank_name ?? "";
+	const terminated = employee.employmentStatus === "terminated";
+	const terminationDateValid = isValidDateKey(terminationDate);
 
 	const setDraftField = <Key extends keyof EmployeeRecord>(key: Key, value: EmployeeRecord[Key]) => {
 		setDraft(current => (current ? { ...current, [key]: value } : current));
@@ -181,7 +228,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 		});
 	};
 
-	const saveEmployee = () => {
+	const saveEmployee = async () => {
 		if (!draft) {
 			return;
 		}
@@ -191,7 +238,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 			return;
 		}
 
-		updateEmployeeRecord(employeeId, {
+		await updateEmployeeRecord(employeeId, {
 			address: draft.address?.trim() || null,
 			birth_date: draft.birth_date?.trim() || null,
 			email: draft.email?.trim() || null,
@@ -215,13 +262,13 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 		setDraft(null);
 	};
 
-	const saveBankAccount = () => {
+	const saveBankAccount = async () => {
 		if (!bankName.trim() || !accountNumber.trim()) {
 			showToast("은행과 계좌번호를 입력해 주세요.");
 			return;
 		}
 
-		updateEmployeeRecord(employeeId, {
+		await updateEmployeeRecord(employeeId, {
 			bank_account_number: accountNumber.trim(),
 			bank_name: bankName.trim(),
 		});
@@ -244,7 +291,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 			const nextDocument = await pickEmployeeDocumentAsync(employeeId, documentType);
 
 			if (nextDocument) {
-				upsertDocumentRecord(nextDocument);
+				await upsertDocumentRecord(nextDocument);
 				showToast("파일이 등록되었습니다.");
 			}
 		} catch {
@@ -257,6 +304,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 	const requestDelete = (item: DocumentDisplayItem) => {
 		if (item.source === "contract") {
 			setPendingDelete({ id: item.id, kind: "contract" });
+			setConfirmAction("delete-document");
 			return;
 		}
 
@@ -268,6 +316,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 				kind: "document",
 				localUri: document.local_uri,
 			});
+			setConfirmAction("delete-document");
 		}
 	};
 
@@ -285,11 +334,41 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 			removeContract(pendingDelete.id);
 		} else {
 			await deleteEmployeeDocumentFileAsync(pendingDelete.localUri);
-			removeDocumentRecord(pendingDelete.id);
+			await removeDocumentRecord(pendingDelete.id);
 		}
 
 		setPendingDelete(null);
+		setConfirmAction(null);
 		showToast("삭제되었습니다.");
+	};
+
+	const requestTerminateEmployee = () => {
+		setTerminationDate(getKoreaTodayKey());
+		setConfirmAction("terminate-employee");
+	};
+
+	const confirmTerminateEmployee = async () => {
+		if (!terminationDateValid) {
+			showToast("올바른 해고 날짜를 입력해 주세요.");
+			return;
+		}
+
+		await updateEmployeeRecord(employeeId, {
+			employment_status: "terminated",
+			terminated_at: toKoreaDateStartIso(terminationDate),
+		});
+		setDraft(null);
+		setConfirmAction(null);
+		showToast("이전 직원 리스트로 이동했습니다.");
+	};
+
+	const rehireEmployee = async () => {
+		await updateEmployeeRecord(employeeId, {
+			employment_status: "active",
+			terminated_at: null,
+		});
+		setDraft(null);
+		showToast("직원 리스트로 다시 이동했습니다.");
 	};
 
 	const documentsByType = (type: EmployeeDocumentType): DocumentDisplayItem[] => {
@@ -454,6 +533,7 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 						<DetailRow label="이메일" value={employee.email} />
 						<DetailRow label="주소" value={employee.address} />
 						<DetailRow label="입사일" value={employee.joinedAt} />
+						{terminated ? <DetailRow label="해고일" value={employee.terminatedAt ? formatUploadedAt(employee.terminatedAt) : ""} /> : null}
 						<DetailRow label="근무지" value={employee.workplaceName} />
 						<DetailRow label="근무조" value={employee.shiftGroup} />
 						<DetailRow label="근무시간" value={formatEmployeeWorkTime(employee)} />
@@ -568,18 +648,74 @@ export function EmployeeDetailView({ employeeId }: { employeeId: string }) {
 							/>
 						))}
 					</ManagementSection>
+					<View style={styles.employeeStatusActionArea}>
+						{terminated ? (
+							<AppPressable
+								accessibilityLabel="직원 재채용하기"
+								accessibilityRole="button"
+								onPress={rehireEmployee}
+								pressedColor="#003E7A"
+								radius="base"
+								style={styles.rehireButton}
+							>
+								<AppText.Base bold color={AppColors.textOnPrimary}>
+									재채용하기
+								</AppText.Base>
+							</AppPressable>
+						) : (
+							<AppPressable
+								accessibilityLabel="직원 해고하기"
+								accessibilityRole="button"
+								onPress={requestTerminateEmployee}
+								pressedColor="#991B1B"
+								radius="base"
+								style={styles.terminateButton}
+							>
+								<AppText.Base bold color={AppColors.textOnPrimary}>
+									해고하기
+								</AppText.Base>
+							</AppPressable>
+						)}
+					</View>
 				</>
 			)}
 
 			<ConfirmDialog
-				message="정말로 삭제하시겠습니까?"
-				onCancel={() => setPendingDelete(null)}
+				confirmDisabled={confirmAction === "terminate-employee" && !terminationDateValid}
+				confirmLabel={confirmAction === "terminate-employee" ? "해고하기" : "삭제"}
+				message={confirmAction === "terminate-employee" ? "정말로 해고 하시겠습니까?" : "정말로 삭제하시겠습니까?"}
+				onCancel={() => {
+					setPendingDelete(null);
+					setConfirmAction(null);
+				}}
 				onConfirm={() => {
+					if (confirmAction === "terminate-employee") {
+						void confirmTerminateEmployee();
+						return;
+					}
+
 					void confirmDelete();
 				}}
-				open={pendingDelete !== null}
-				title="서류 삭제"
-			/>
+				open={confirmAction !== null}
+				title={confirmAction === "terminate-employee" ? "직원 해고" : "서류 삭제"}
+			>
+				{confirmAction === "terminate-employee" ? (
+					<View style={styles.terminationDateField}>
+						<ManagementField
+							accessibilityLabel="해고 날짜"
+							keyboardType="number-pad"
+							label="해고일"
+							maxLength={10}
+							onChangeText={value => setTerminationDate(formatDateInput(value))}
+							placeholder="YYYY-MM-DD"
+							value={terminationDate}
+						/>
+						{!terminationDateValid ? (
+							<AppText.Xs color="#B42318">날짜를 YYYY-MM-DD 형식으로 입력해 주세요.</AppText.Xs>
+						) : null}
+					</View>
+				) : null}
+			</ConfirmDialog>
 		</View>
 	);
 }
@@ -588,6 +724,10 @@ const styles = StyleSheet.create({
 	container: {
 		width: "100%",
 		paddingBottom: AppSpacing.xl,
+	},
+	terminationDateField: {
+		gap: AppSpacing.xs,
+		paddingTop: AppSpacing.xs,
 	},
 	notFound: {
 		minHeight: 240,
@@ -700,6 +840,26 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		borderWidth: 1,
 		borderColor: "#CBD5E1",
+		paddingHorizontal: AppSpacing.md,
+	},
+	employeeStatusActionArea: {
+		paddingHorizontal: AppSpacing.md,
+		paddingTop: AppSpacing.sm,
+	},
+	rehireButton: {
+		width: "100%",
+		minHeight: 54,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: AppColors.primary,
+		paddingHorizontal: AppSpacing.md,
+	},
+	terminateButton: {
+		width: "100%",
+		minHeight: 54,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#B91C1C",
 		paddingHorizontal: AppSpacing.md,
 	},
 	accountRow: {

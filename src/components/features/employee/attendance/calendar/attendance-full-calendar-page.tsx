@@ -2,7 +2,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
-import { AttendanceDayPopup } from "@/components/features/employee/attendance/calendar/attendance-day-popup";
+import {
+	AttendanceDayPopup,
+	type TemporaryWorkerRegistrationPayload,
+} from "@/components/features/employee/attendance/calendar/attendance-day-popup";
 import { AttendanceGreetingOverlay } from "@/components/features/employee/attendance/calendar/attendance-greeting-overlay";
 import { AttendanceMonthCalendar } from "@/components/features/employee/attendance/calendar/attendance-month-calendar";
 import { useAttendanceEmployees } from "@/components/features/employee/attendance/use-attendance-employees";
@@ -29,6 +32,7 @@ export function AttendanceFullCalendarPage() {
 	const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 	const [feedback, setFeedback] = useState<AttendanceFeedbackPayload | null>(null);
 	const attendanceRecords = useAttendanceStore(state => state.records);
+	const registerTemporaryWorker = useAttendanceStore(state => state.registerTemporaryWorker);
 	const visibleSchedule = useMemo(
 		() =>
 			buildAttendanceSchedule({
@@ -51,6 +55,21 @@ export function AttendanceFullCalendarPage() {
 		setVisibleMonth(getCalendarMonth(todayKey));
 		setSelectedDateKey(null);
 	}, [todayKey]);
+
+	const handleRegisterTemporaryWorker = useCallback(
+		(payload: TemporaryWorkerRegistrationPayload) => {
+			void registerTemporaryWorker(
+				payload.entry,
+				{
+					hourlyWage: payload.hourlyWage,
+					name: payload.name,
+					phone: payload.phone,
+				},
+				payload.confirmedWorkMinutes,
+			);
+		},
+		[registerTemporaryWorker],
+	);
 
 	return (
 		<>
@@ -79,11 +98,13 @@ export function AttendanceFullCalendarPage() {
 			</AppLayout>
 			{selectedDateKey && (
 				<AttendanceDayPopup
+					allowTemporaryWorker
 					dateKey={selectedDateKey}
 					entries={selectedEntries}
 					monthEntries={visibleSchedule}
 					onClose={() => setSelectedDateKey(null)}
 					onFeedback={setFeedback}
+					onRegisterTemporaryWorker={handleRegisterTemporaryWorker}
 					todayKey={todayKey}
 				/>
 			)}

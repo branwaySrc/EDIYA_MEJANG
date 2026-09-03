@@ -10,6 +10,15 @@ import type {
 import type { FindEntry } from "@/database/find/find.type";
 import type { RecipeDetail } from "@/database/recipe/recipe-details.type";
 import type { Recipe } from "@/database/recipe/recipe.type";
+import {
+	getFindEntryStoragePaths,
+	getRecipeDetailStoragePaths,
+	removeContentImagesBestEffortAsync,
+	toStoredFindEntry,
+	toStoredRecipeDetail,
+	withPublicFindEntryImageUrls,
+	withPublicRecipeDetailImageUrls,
+} from "@/lib/sajang-content/supabase-content-images";
 import { getSupabaseClientOrNull } from "@/lib/supabase/supabase-client";
 
 type ListContentOptions = {
@@ -72,7 +81,7 @@ export async function listSupabaseFindEntriesAsync({
 	}
 
 	return data.map(row => ({
-		entry: row.payload,
+		entry: withPublicFindEntryImageUrls(row.payload),
 		status: row.status,
 	}));
 }
@@ -135,19 +144,51 @@ export async function upsertSupabaseFindEntryAsync({
 
 export async function deleteSupabaseRecipeBundleAsync(recipeId: string): Promise<void> {
 	const supabase = getConfiguredSupabaseClient();
+	const detailResult = await supabase
+		.from("recipe_details")
+		.select("*")
+		.eq("recipe_id", recipeId)
+		.maybeSingle<SupabaseRecipeDetailRow>();
+
+	if (detailResult.error) {
+		throw detailResult.error;
+	}
+
 	const { error } = await supabase.from("recipes").delete().eq("id", recipeId);
 
 	if (error) {
 		throw error;
 	}
+
+	if (detailResult.data) {
+		await removeContentImagesBestEffortAsync(
+			getRecipeDetailStoragePaths(recipeDetailRowToDetail(detailResult.data)),
+		);
+	}
 }
 
 export async function deleteSupabaseFindEntryAsync(entryId: string): Promise<void> {
 	const supabase = getConfiguredSupabaseClient();
+	const entryResult = await supabase
+		.from("find_entries")
+		.select("payload")
+		.eq("id", entryId)
+		.maybeSingle<Pick<SupabaseFindEntryRow, "payload">>();
+
+	if (entryResult.error) {
+		throw entryResult.error;
+	}
+
 	const { error } = await supabase.from("find_entries").delete().eq("id", entryId);
 
 	if (error) {
 		throw error;
+	}
+
+	if (entryResult.data) {
+		await removeContentImagesBestEffortAsync(
+			getFindEntryStoragePaths(entryResult.data.payload),
+		);
 	}
 }
 
@@ -164,7 +205,7 @@ function getConfiguredSupabaseClient() {
 function rowToRecipeBundle(row: SupabaseRecipeRow & { recipe_details: SupabaseRecipeDetailRow | null }): SupabaseRecipeBundle {
 	return {
 		detail: row.recipe_details
-			? recipeDetailRowToDetail(row.recipe_details)
+			? withPublicRecipeDetailImageUrls(recipeDetailRowToDetail(row.recipe_details))
 			: {
 					delivery: [],
 					heroVisuals: [],
@@ -210,31 +251,35 @@ function recipeToRow(recipe: Recipe, status: ContentStatus): SupabaseRecipeRow {
 }
 
 function recipeDetailToRow(recipeId: string, detail: RecipeDetail, updatedAt: string): SupabaseRecipeDetailRow {
+	const storedDetail = toStoredRecipeDetail(detail);
+
 	return {
 		created_at: updatedAt,
-		delivery: detail.delivery,
-		hero_visuals: detail.heroVisuals,
-		packaging: detail.packaging,
+		delivery: storedDetail.delivery,
+		hero_visuals: storedDetail.heroVisuals,
+		packaging: storedDetail.packaging,
 		recipe_id: recipeId,
-		steps: detail.steps,
-		store_serving: detail.storeServing,
+		steps: storedDetail.steps,
+		store_serving: storedDetail.storeServing,
 		updated_at: updatedAt,
 	};
 }
 
 function findEntryToRow(entry: FindEntry, status: ContentStatus): SupabaseFindEntryRow {
+	const storedEntry = toStoredFindEntry(entry);
+
 	return {
-		chosung: entry.chosung ?? null,
-		created_at: entry.updatedAt,
-		id: entry.id,
-		kind: entry.kind,
-		notes: entry.notes ?? null,
-		payload: entry,
-		recipe_id: entry.recipeId,
+		chosung: storedEntry.chosung ?? null,
+		created_at: storedEntry.updatedAt,
+		id: storedEntry.id,
+		kind: storedEntry.kind,
+		notes: storedEntry.notes ?? null,
+		payload: storedEntry,
+		recipe_id: storedEntry.recipeId,
 		sort_order: 0,
 		status,
-		summary: entry.summary,
-		title: entry.title,
-		updated_at: entry.updatedAt,
+		summary: storedEntry.summary,
+		title: storedEntry.title,
+		updated_at: storedEntry.updatedAt,
 	};
 }

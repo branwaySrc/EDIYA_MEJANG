@@ -43,10 +43,7 @@ export function EmployeeView({ onPressEmployee, owner, sections }: EmployeeViewP
 					<View style={styles.employeeGrid}>
 						{section.employees.map(employee => (
 							<View key={employee.id} style={styles.employeeGridItem}>
-								<EmployeeCard
-									employee={employee}
-									onPress={onPressEmployee ? () => onPressEmployee(employee) : undefined}
-								/>
+								<EmployeeCard employee={employee} onPress={onPressEmployee ? () => onPressEmployee(employee) : undefined} />
 							</View>
 						))}
 					</View>
@@ -63,6 +60,7 @@ const styles = StyleSheet.create({
 		gap: AppSpacing.lg,
 		padding: AppSpacing.md,
 		paddingBottom: AppSpacing.xl,
+		marginBottom: AppSpacing.xl,
 	},
 	section: {
 		gap: AppSpacing.sm,

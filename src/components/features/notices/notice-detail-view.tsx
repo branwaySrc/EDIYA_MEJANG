@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppBadge } from "@/components/base/app-badge";
@@ -32,13 +33,33 @@ function renderSection(section: ManagedContentSection) {
 	);
 }
 
+function normalizeNoticeKeywords(keywords: unknown) {
+	if (!Array.isArray(keywords)) {
+		return [];
+	}
+
+	return keywords
+		.flatMap(keyword => (typeof keyword === "string" ? keyword : []))
+		.map(keyword => keyword.trim())
+		.filter(Boolean);
+}
+
 export function NoticeDetailView({ noticeId }: NoticeDetailViewProps) {
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const notices = useContentManagementStore(state => state.notices);
 	const notice = notices.find(item => item.id === noticeId);
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
 
 	if (!notice) {
 		return (
 			<View style={styles.container}>
+				{contentSyncing ? (
+					<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+				) : null}
 				<AppText.Xl bold color={AppColors.primary}>
 					공지사항을 찾을 수 없습니다
 				</AppText.Xl>
@@ -46,6 +67,8 @@ export function NoticeDetailView({ noticeId }: NoticeDetailViewProps) {
 			</View>
 		);
 	}
+
+	const keywords = normalizeNoticeKeywords(notice.keywords);
 
 	return (
 		<View style={styles.container}>
@@ -56,10 +79,10 @@ export function NoticeDetailView({ noticeId }: NoticeDetailViewProps) {
 				<AppText.Sm color={AppColors.sub}>
 					{[notice.shiftGroup, notice.description, notice.uploadedAt].filter(Boolean).join(" · ")}
 				</AppText.Sm>
-				{notice.keywords.length > 0 ? (
+				{keywords.length > 0 ? (
 					<View style={styles.keywordList}>
-						{notice.keywords.map(keyword => (
-							<AppBadge key={keyword} tone="primary">
+						{keywords.map((keyword, index) => (
+							<AppBadge key={`${keyword}-${index}`} tone="primary">
 								{keyword}
 							</AppBadge>
 						))}

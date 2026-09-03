@@ -1,8 +1,10 @@
 import { type Href, useRouter } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { AppText } from "@/components/base/app-text";
 import { NoticeItem } from "@/components/features/notices/notice-item";
-import { AppSpacing } from "@/constants/theme";
+import { AppColors, AppSpacing } from "@/constants/theme";
 import type { Notice } from "@/database/notices/notice";
 import { useContentManagementStore } from "@/store/content-management-store";
 
@@ -12,11 +14,26 @@ export type NoticeListProps = {
 
 export function NoticeList({ notices }: NoticeListProps) {
 	const router = useRouter();
+	const contentSyncErrorMessage = useContentManagementStore(state => state.contentSyncErrorMessage);
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const managedNotices = useContentManagementStore(state => state.notices);
 	const currentNotices = notices ?? managedNotices;
 
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
+
 	return (
 		<View style={styles.container}>
+			{contentSyncing ? (
+				<View style={styles.loadingBox}>
+					<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+				</View>
+			) : null}
+			{contentSyncErrorMessage ? (
+				<AppText.Sm color="#B91C1C">{contentSyncErrorMessage}</AppText.Sm>
+			) : null}
 			{currentNotices.map((notice, index) => (
 				<NoticeItem
 					key={notice.id}
@@ -41,5 +58,11 @@ const styles = StyleSheet.create({
 		gap: AppSpacing.sm,
 		padding: AppSpacing.md,
 		paddingBottom: AppSpacing.xl,
+	},
+	loadingBox: {
+		minHeight: 64,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#F4F9FF",
 	},
 });

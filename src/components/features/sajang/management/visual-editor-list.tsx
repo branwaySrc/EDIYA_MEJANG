@@ -12,6 +12,7 @@ export type ManagedVisualDraft = {
 	desc: string;
 	id: string;
 	imageUri: string;
+	storagePath?: string;
 	title: string;
 };
 
@@ -135,7 +136,13 @@ export function VisualEditorList({
 					<ManagementImagePicker
 						accessibilityLabel={visual.imageUri ? `이미지 ${index + 1} 변경` : `이미지 ${index + 1} 선택`}
 						imageUri={visual.imageUri}
-						onChange={imageUri => updateVisual(index, { ...visual, imageUri })}
+						onChange={imageUri =>
+							updateVisual(index, {
+								...visual,
+								imageUri,
+								storagePath: undefined,
+							})
+						}
 					/>
 
 					<ManagementField

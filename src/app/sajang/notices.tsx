@@ -1,5 +1,5 @@
 import { type Href, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { AppSpacer } from "@/components/base/app-spacer";
@@ -52,12 +52,20 @@ export default function SajangNoticesScreen() {
 	const manualEntries = useContentManagementStore(state => state.manualEntries);
 	const tutorialTopics = useContentManagementStore(state => state.tutorialTopics);
 	const tutorialEntries = useContentManagementStore(state => state.tutorialEntries);
+	const contentSyncErrorMessage = useContentManagementStore(state => state.contentSyncErrorMessage);
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
 	const deleteManualEntry = useContentManagementStore(state => state.deleteManualEntry);
 	const deleteNotice = useContentManagementStore(state => state.deleteNotice);
 	const deleteTutorialEntry = useContentManagementStore(state => state.deleteTutorialEntry);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const [activeTabId, setActiveTabId] = useState<ManagedContentType>("notice");
 	const [keyword, setKeyword] = useState("");
 	const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
+
 	const visibleItems = useMemo<ManagedListItem[]>(() => {
 		let items: ManagedListItem[];
 
@@ -115,11 +123,11 @@ export default function SajangNoticesScreen() {
 		}
 
 		if (pendingDelete.type === "notice") {
-			deleteNotice(pendingDelete.id);
+			void deleteNotice(pendingDelete.id);
 		} else if (pendingDelete.type === "manual") {
-			deleteManualEntry(pendingDelete.id);
+			void deleteManualEntry(pendingDelete.id);
 		} else {
-			deleteTutorialEntry(pendingDelete.id);
+			void deleteTutorialEntry(pendingDelete.id);
 		}
 
 		setPendingDelete(null);
@@ -161,7 +169,21 @@ export default function SajangNoticesScreen() {
 				ItemSeparatorComponent={() => <AppSpacer style={styles.separator} />}
 				keyExtractor={item => item.id}
 				keyboardShouldPersistTaps="handled"
-				ListEmptyComponent={<EmptyList />}
+				ListEmptyComponent={contentSyncing ? null : <EmptyList />}
+				ListHeaderComponent={
+					<>
+						{contentSyncing ? (
+							<View style={styles.loadingBox}>
+								<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+							</View>
+						) : null}
+						{contentSyncErrorMessage ? (
+							<AppText.Sm color="#B91C1C" style={styles.syncError}>
+								{contentSyncErrorMessage}
+							</AppText.Sm>
+						) : null}
+					</>
+				}
 				renderItem={({ item }) => (
 					<ManagementItemRow
 						badge={contentTabs.find(tab => tab.id === activeTabId)?.label}
@@ -213,5 +235,16 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		padding: AppSpacing.md,
+	},
+	loadingBox: {
+		minHeight: 64,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#F4F9FF",
+		marginBottom: AppSpacing.sm,
+	},
+	syncError: {
+		marginBottom: AppSpacing.sm,
+		paddingHorizontal: AppSpacing.md,
 	},
 });

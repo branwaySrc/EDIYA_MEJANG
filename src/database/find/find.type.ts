@@ -26,6 +26,7 @@ export type FindMaterialDetailImage = {
 	image?: ImageSourcePropType;
 	id: string;
 	source?: ImageSourcePropType;
+	storagePath?: string;
 	title?: string;
 };
 

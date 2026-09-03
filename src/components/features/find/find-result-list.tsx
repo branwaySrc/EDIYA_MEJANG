@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useMemo } from "react";
+import { FlatList, Keyboard, Pressable, StyleSheet, View } from "react-native";
 
 import { AppBadge } from "@/components/base/app-badge";
 import { AppIcon } from "@/components/base/app-icon";
@@ -115,6 +115,13 @@ export function FindResultList({ activeKind, keyword = "", onOpenEntry, results 
 	const managedEntries = useContentManagementStore(state => state.findEntries);
 	const currentResults = results ?? managedEntries;
 	const hasKeyword = keyword.trim().length > 0;
+	const handleOpenEntry = useCallback(
+		(entry: FindEntry) => {
+			Keyboard.dismiss();
+			onOpenEntry?.(entry);
+		},
+		[onOpenEntry],
+	);
 	const visibleResults = useMemo(
 		() => currentResults.filter(result => result.kind === activeKind),
 		[activeKind, currentResults],
@@ -148,7 +155,7 @@ export function FindResultList({ activeKind, keyword = "", onOpenEntry, results 
 				<FindResultItem
 					entry={result.item}
 					highlightRange={result.highlightRange}
-					onOpen={() => onOpenEntry?.(result.item)}
+					onOpen={() => handleOpenEntry(result.item)}
 				/>
 			)}
 			showsVerticalScrollIndicator={false}

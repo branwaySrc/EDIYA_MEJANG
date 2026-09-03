@@ -1,4 +1,5 @@
 import { type Href, useRouter } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppIcon } from "@/components/base/app-icon";
@@ -15,6 +16,9 @@ export type TutorialListProps = {
 
 export function TutorialList({ detailRoutePrefix = "/tutorial", topics }: TutorialListProps) {
 	const router = useRouter();
+	const contentSyncErrorMessage = useContentManagementStore(state => state.contentSyncErrorMessage);
+	const contentSyncing = useContentManagementStore(state => state.contentSyncing);
+	const hydrateManagedContentFromRemote = useContentManagementStore(state => state.hydrateManagedContentFromRemote);
 	const managedTopics = useContentManagementStore(state => state.tutorialTopics);
 	const managedEntries = useContentManagementStore(state => state.tutorialEntries);
 	const currentEntries = topics
@@ -23,6 +27,10 @@ export function TutorialList({ detailRoutePrefix = "/tutorial", topics }: Tutori
 
 	const getSubtitle = (entry: TutorialEntry) =>
 		entry.description?.trim() || entry.shiftGroup || managedTopics.find(topic => topic.slug === entry.topicSlug)?.title || "튜토리얼";
+
+	useEffect(() => {
+		void hydrateManagedContentFromRemote();
+	}, [hydrateManagedContentFromRemote]);
 
 	return (
 		<View style={styles.container}>
@@ -34,6 +42,14 @@ export function TutorialList({ detailRoutePrefix = "/tutorial", topics }: Tutori
 			</View>
 
 			<View style={styles.list}>
+				{contentSyncing ? (
+					<View style={styles.loadingBox}>
+						<AppText.Sm color={AppColors.sub}>데이터를 불러오고 있습니다</AppText.Sm>
+					</View>
+				) : null}
+				{contentSyncErrorMessage ? (
+					<AppText.Sm color="#B91C1C">{contentSyncErrorMessage}</AppText.Sm>
+				) : null}
 				{currentEntries.map(entry => (
 					<AppPressable
 						key={entry.id}
@@ -91,5 +107,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 		minWidth: 0,
 		gap: AppSpacing.xs,
+	},
+	loadingBox: {
+		minHeight: 64,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#F4F9FF",
 	},
 });

@@ -49,6 +49,8 @@ create table if not exists public.paid_ledger_entries (
   business_date date not null,
   occurred_at timestamptz not null default now(),
   memo text,
+  receipt_storage_path text,
+  receipt_uploaded_at timestamptz,
   created_by text,
   idempotency_key text,
   reversal_of_entry_id text references public.paid_ledger_entries(id),
@@ -96,6 +98,131 @@ before insert or update on public.paid_customers
 for each row
 execute function public.touch_paid_customer_updated_at();
 
+drop function if exists public.create_paid_customer_with_opening_entry(
+  text,
+  text,
+  text,
+  text,
+  text,
+  date,
+  integer,
+  text,
+  text,
+  text,
+  text,
+  timestamptz
+);
+
+create or replace function public.create_paid_customer_with_opening_entry(
+  p_customer_id text,
+  p_store_id text,
+  p_name text,
+  p_nickname text,
+  p_affiliation text,
+  p_first_paid_date date,
+  p_initial_balance integer,
+  p_opening_ledger_entry_id text default null,
+  p_phone text default null,
+  p_memo text default null,
+  p_receipt_storage_path text default null,
+  p_receipt_uploaded_at timestamptz default null
+)
+returns public.paid_customers
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_customer public.paid_customers%rowtype;
+  v_opening_ledger_entry_id text;
+begin
+  if p_initial_balance <= 0 then
+    raise exception 'initial prepaid balance must be greater than 0';
+  end if;
+
+  select *
+    into v_customer
+    from public.paid_customers
+    where id = p_customer_id;
+
+  if found then
+    return v_customer;
+  end if;
+
+  v_opening_ledger_entry_id := coalesce(nullif(p_opening_ledger_entry_id, ''), p_customer_id || '-opening');
+
+  insert into public.paid_customers (
+    id,
+    store_id,
+    name,
+    nickname,
+    affiliation,
+    phone,
+    memo,
+    first_paid_date,
+    initial_balance,
+    current_balance,
+    status
+  )
+  values (
+    p_customer_id,
+    p_store_id,
+    p_name,
+    p_nickname,
+    p_affiliation,
+    p_phone,
+    p_memo,
+    p_first_paid_date,
+    p_initial_balance,
+    p_initial_balance,
+    'active'
+  )
+  returning * into v_customer;
+
+  insert into public.paid_ledger_entries (
+    id,
+    store_id,
+    customer_id,
+    type,
+    amount,
+    amount_delta,
+    balance_before,
+    balance_after,
+    business_date,
+    memo,
+    receipt_storage_path,
+    receipt_uploaded_at
+  )
+  values (
+    v_opening_ledger_entry_id,
+    p_store_id,
+    p_customer_id,
+    'opening',
+    p_initial_balance,
+    p_initial_balance,
+    0,
+    p_initial_balance,
+    p_first_paid_date,
+    'Initial prepaid balance',
+    p_receipt_storage_path,
+    p_receipt_uploaded_at
+  );
+
+  return v_customer;
+end;
+$$;
+
+drop function if exists public.record_paid_ledger_entry(
+  text,
+  public.paid_ledger_entry_type,
+  integer,
+  date,
+  text,
+  text,
+  text,
+  text
+);
+
 create or replace function public.record_paid_ledger_entry(
   p_customer_id text,
   p_type public.paid_ledger_entry_type,
@@ -104,7 +231,8 @@ create or replace function public.record_paid_ledger_entry(
   p_memo text default null,
   p_created_by text default null,
   p_idempotency_key text default null,
-  p_reversal_of_entry_id text default null
+  p_reversal_of_entry_id text default null,
+  p_receipt_storage_path text default null
 )
 returns public.paid_ledger_entries
 language plpgsql
@@ -162,6 +290,8 @@ begin
     balance_after,
     business_date,
     memo,
+    receipt_storage_path,
+    receipt_uploaded_at,
     created_by,
     idempotency_key,
     reversal_of_entry_id
@@ -176,6 +306,8 @@ begin
     v_customer.current_balance + v_delta,
     p_business_date,
     p_memo,
+    p_receipt_storage_path,
+    case when p_receipt_storage_path is null then null else now() end,
     p_created_by,
     p_idempotency_key,
     p_reversal_of_entry_id
@@ -196,6 +328,20 @@ alter table public.paid_ledger_entries enable row level security;
 
 grant select, insert, update on table public.paid_customers to anon, authenticated;
 grant select, insert on table public.paid_ledger_entries to anon, authenticated;
+grant execute on function public.create_paid_customer_with_opening_entry(
+  text,
+  text,
+  text,
+  text,
+  text,
+  date,
+  integer,
+  text,
+  text,
+  text,
+  text,
+  timestamptz
+) to anon, authenticated;
 grant execute on function public.record_paid_ledger_entry(
   text,
   public.paid_ledger_entry_type,
@@ -204,8 +350,24 @@ grant execute on function public.record_paid_ledger_entry(
   text,
   text,
   text,
+  text,
   text
 ) to anon, authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'paid-receipts',
+  'paid-receipts',
+  false,
+  6291456,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Store client can read prepaid customers." on public.paid_customers;
 
 create policy "Store client can read prepaid customers."
   on public.paid_customers
@@ -213,11 +375,15 @@ create policy "Store client can read prepaid customers."
   to anon, authenticated
   using (true);
 
+drop policy if exists "Store client can create prepaid customers." on public.paid_customers;
+
 create policy "Store client can create prepaid customers."
   on public.paid_customers
   for insert
   to anon, authenticated
   with check (true);
+
+drop policy if exists "Store client can update prepaid customers." on public.paid_customers;
 
 create policy "Store client can update prepaid customers."
   on public.paid_customers
@@ -226,17 +392,37 @@ create policy "Store client can update prepaid customers."
   using (true)
   with check (true);
 
+drop policy if exists "Store client can read prepaid ledger entries." on public.paid_ledger_entries;
+
 create policy "Store client can read prepaid ledger entries."
   on public.paid_ledger_entries
   for select
   to anon, authenticated
   using (true);
 
+drop policy if exists "Store client can append prepaid ledger entries." on public.paid_ledger_entries;
+
 create policy "Store client can append prepaid ledger entries."
   on public.paid_ledger_entries
   for insert
   to anon, authenticated
   with check (true);
+
+drop policy if exists "Store client can upload prepaid receipt images." on storage.objects;
+
+create policy "Store client can upload prepaid receipt images."
+  on storage.objects
+  for insert
+  to anon, authenticated
+  with check (bucket_id = 'paid-receipts');
+
+drop policy if exists "Store client can read prepaid receipt images." on storage.objects;
+
+create policy "Store client can read prepaid receipt images."
+  on storage.objects
+  for select
+  to anon, authenticated
+  using (bucket_id = 'paid-receipts');
 
 -- Current store-only app model:
 -- The Expo client can manage prepaid customers after local in-app gating.

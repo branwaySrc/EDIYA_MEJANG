@@ -12,13 +12,33 @@ export type EmployeeCardProps = {
 	onPress?: () => void;
 };
 
+function formatCardDate(value: string | null) {
+	if (!value) {
+		return "";
+	}
+
+	const date = new Date(value);
+
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+
+	return date.toLocaleDateString("ko-KR", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	});
+}
+
 export const EmployeeCard = memo(function EmployeeCard({ employee, onPress }: EmployeeCardProps) {
+	const terminated = employee.employmentStatus === "terminated";
+	const cardStyle = [styles.card, employee.owner && styles.ownerCard, terminated && styles.terminatedCard];
 	const content = (
 		<>
 			<View style={styles.header}>
 				<View style={styles.identity}>
-					<AppText.Xs bold color={AppColors.primary} numberOfLines={1}>
-						{employee.owner ? "매장 운영" : employee.shiftGroup}
+					<AppText.Xs bold color={terminated ? "#B91C1C" : AppColors.primary} numberOfLines={1}>
+						{terminated ? "이전 직원" : employee.owner ? "매장 운영" : employee.shiftGroup}
 					</AppText.Xs>
 					<AppText.Lg bold numberOfLines={1}>
 						{employee.name}
@@ -26,6 +46,17 @@ export const EmployeeCard = memo(function EmployeeCard({ employee, onPress }: Em
 				</View>
 				{employee.owner && <AppBadge tone="primary">사장</AppBadge>}
 			</View>
+
+			{terminated ? (
+				<View style={styles.terminatedInfo}>
+					<AppText.Xs bold color="#B91C1C">
+						해고일
+					</AppText.Xs>
+					<AppText.Sm bold color="#B91C1C" numberOfLines={1}>
+						{formatCardDate(employee.terminatedAt)}
+					</AppText.Sm>
+				</View>
+			) : null}
 
 			<View style={styles.contact}>
 				<AppText.Xs bold color={AppColors.sub}>
@@ -68,14 +99,14 @@ export const EmployeeCard = memo(function EmployeeCard({ employee, onPress }: Em
 				onPress={onPress}
 				pressedColor="rgba(0, 75, 147, 0.05)"
 				radius="idle"
-				style={[styles.card, employee.owner && styles.ownerCard]}
+				style={cardStyle}
 			>
 				{content}
 			</AppPressable>
 		);
 	}
 
-	return <View style={[styles.card, employee.owner && styles.ownerCard]}>{content}</View>;
+	return <View style={cardStyle}>{content}</View>;
 });
 
 export default EmployeeCard;
@@ -96,6 +127,10 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(0, 75, 147, 0.42)",
 		backgroundColor: "#F8FBFF",
 	},
+	terminatedCard: {
+		borderColor: "rgba(185, 28, 28, 0.32)",
+		backgroundColor: "#FFF7F7",
+	},
 	header: {
 		flexDirection: "row",
 		alignItems: "flex-start",
@@ -111,6 +146,12 @@ const styles = StyleSheet.create({
 		gap: 2,
 		borderBottomWidth: 1,
 		borderBottomColor: "rgba(71, 85, 105, 0.18)",
+		paddingBottom: AppSpacing.sm,
+	},
+	terminatedInfo: {
+		gap: 2,
+		borderBottomWidth: 1,
+		borderBottomColor: "rgba(185, 28, 28, 0.16)",
 		paddingBottom: AppSpacing.sm,
 	},
 	schedule: {

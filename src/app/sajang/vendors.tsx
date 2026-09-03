@@ -1,5 +1,5 @@
 import { type Href, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { AppSpacer } from "@/components/base/app-spacer";
@@ -25,6 +25,9 @@ function EmptyVendorList() {
 export default function SajangVendorsScreen() {
 	const router = useRouter();
 	const vendors = useContentManagementStore(state => state.vendors);
+	const hydrateVendorsFromRemote = useContentManagementStore(state => state.hydrateVendorsFromRemote);
+	const vendorSyncErrorMessage = useContentManagementStore(state => state.vendorSyncErrorMessage);
+	const vendorSyncing = useContentManagementStore(state => state.vendorSyncing);
 	const [keyword, setKeyword] = useState("");
 	const visibleVendors = useMemo(
 		() =>
@@ -43,6 +46,10 @@ export default function SajangVendorsScreen() {
 			params: { id },
 		} as Href);
 	};
+
+	useEffect(() => {
+		void hydrateVendorsFromRemote();
+	}, [hydrateVendorsFromRemote]);
 
 	return (
 		<AppLayout
@@ -69,7 +76,23 @@ export default function SajangVendorsScreen() {
 				ItemSeparatorComponent={() => <AppSpacer style={styles.separator} />}
 				keyExtractor={vendor => vendor.id}
 				keyboardShouldPersistTaps="handled"
-				ListEmptyComponent={<EmptyVendorList />}
+				ListHeaderComponent={
+					<>
+						{vendorSyncing ? (
+							<View style={styles.loadingBox}>
+								<AppText.Base bold color={AppColors.primary}>
+									데이터를 불러오고 있습니다
+								</AppText.Base>
+							</View>
+						) : null}
+						{vendorSyncErrorMessage ? (
+							<AppText.Xs color="#B91C1C" style={styles.syncError}>
+								{vendorSyncErrorMessage}
+							</AppText.Xs>
+						) : null}
+					</>
+				}
+				ListEmptyComponent={vendorSyncing ? null : <EmptyVendorList />}
 				renderItem={({ item: vendor }) => (
 					<ManagementItemRow
 						badge="거래처"
@@ -105,6 +128,17 @@ const styles = StyleSheet.create({
 	},
 	separator: {
 		opacity: 0.32,
+	},
+	loadingBox: {
+		minHeight: 64,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#F4F9FF",
+		marginBottom: AppSpacing.sm,
+	},
+	syncError: {
+		marginBottom: AppSpacing.sm,
+		paddingHorizontal: AppSpacing.md,
 	},
 	empty: {
 		flex: 1,

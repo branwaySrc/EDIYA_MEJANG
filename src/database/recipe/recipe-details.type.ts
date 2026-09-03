@@ -4,6 +4,7 @@ export type RecipeVisual = {
 	id: string;
 	image?: string;
 	imageUri?: string;
+	storagePath?: string;
 	title: string;
 };
 
